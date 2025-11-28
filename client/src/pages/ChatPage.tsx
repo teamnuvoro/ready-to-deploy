@@ -25,14 +25,40 @@ export default function ChatPage() {
   const { data: session, isLoading: isSessionLoading } = useQuery<Session>({
     queryKey: ["/api/session"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('get-session');
-      if (error) throw error;
-      return data;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const res = await fetch(`${supabaseUrl}/functions/v1/get-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+      });
+      
+      if (!res.ok) throw new Error("Failed to get session");
+      return res.json();
     }
   });
 
   const { data: messages = [], isLoading: isMessagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages", session?.id],
+    queryFn: async () => {
+      if (!session?.id) return [];
+      
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      const res = await fetch(`${supabaseUrl}/functions/v1/get-messages?sessionId=${session.id}`, {
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+      });
+      
+      if (!res.ok) throw new Error("Failed to get messages");
+      const data = await res.json();
+      return data || [];
+    },
     enabled: !!session?.id,
   });
 
@@ -67,12 +93,15 @@ export default function ChatPage() {
       abortControllerRef.current = new AbortController();
 
       try {
-        const response = await fetch("/api/chat", {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseKey}`,
           },
-          // GENIUS MOVE: We send the persona ID *with* the message.
           body: JSON.stringify({ content, sessionId: session.id }),
           signal: abortControllerRef.current.signal,
         });
