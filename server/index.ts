@@ -19,21 +19,26 @@ import { globalErrorHandler } from './middleware/errorHandler';
 const app = express();
 
 // 1. Initialize Sentry (Top of file)
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  integrations: [
-    // enable HTTP calls tracing
-    new Sentry.Integrations.Http({ tracing: true }),
-    // enable Express.js tracing
-    new Sentry.Integrations.Express({ app }),
-    // enable Profiling
-    new ProfilingIntegration(),
-  ],
-  // Performance Monitoring
-  tracesSampleRate: 1.0,
-  // Set sampling rate for profiling - this is relative to tracesSampleRate
-  profilesSampleRate: 1.0,
-});
+// 1. Initialize Sentry (Top of file)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [
+      // enable HTTP calls tracing
+      new Sentry.Integrations.Http({ tracing: true }),
+      // enable Express.js tracing
+      new Sentry.Integrations.Express({ app }),
+      // enable Profiling
+      new ProfilingIntegration(),
+    ],
+    // Performance Monitoring
+    tracesSampleRate: 1.0,
+    // Set sampling rate for profiling - this is relative to tracesSampleRate
+    profilesSampleRate: 1.0,
+  });
+} else {
+  console.log("Skipping Sentry initialization: SENTRY_DSN not set");
+}
 
 // 2. Sentry Request Handler (Must be first middleware)
 app.use(Sentry.Handlers.requestHandler() as express.RequestHandler);
@@ -72,8 +77,6 @@ if (!usePgSessionStore) {
     "[session] Using in-memory session store. Sessions reset on server restart.",
   );
 }
-
-
 
 let sessionSecret = process.env.SESSION_SECRET;
 
@@ -150,9 +153,26 @@ import { setupAnalyticsListener } from "./services/analyticsWorker";
 
 (async () => {
   // Initialize Background Services (The Dual Brain)
-  setupAnalyst();
-  setupSleepProcessor();
-  setupAnalyticsListener();
+  try {
+    setupAnalyst();
+    console.log("Analyst service initialized");
+  } catch (err) {
+    console.error("Failed to initialize Analyst service:", err);
+  }
+
+  try {
+    setupSleepProcessor();
+    console.log("Sleep Processor initialized");
+  } catch (err) {
+    console.error("Failed to initialize Sleep Processor:", err);
+  }
+
+  try {
+    setupAnalyticsListener();
+    console.log("Analytics Listener initialized");
+  } catch (err) {
+    console.error("Failed to initialize Analytics Listener:", err);
+  }
 
   const server = await registerRoutes(app);
 
