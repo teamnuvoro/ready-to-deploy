@@ -36,6 +36,18 @@ interface CashfreeOrderResponse {
 }
 
 export async function createCashfreeOrder(params: CreateOrderParams): Promise<CashfreeOrderResponse> {
+  // MOCK for Dev/Sandbox if credentials are missing or invalid
+  if (cashfreeMode === "sandbox" && (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY || CASHFREE_APP_ID === "TEST_APP_ID")) {
+    console.warn("⚠️ Using MOCK Cashfree Order (Sandbox/No Creds)");
+    return {
+      cf_order_id: Math.floor(Math.random() * 100000),
+      order_id: params.orderId,
+      order_token: "mock_token_" + Date.now(),
+      payment_session_id: "session_" + Date.now(),
+      order_status: "ACTIVE",
+    };
+  }
+
   try {
     const payload: Record<string, any> = {
       order_id: params.orderId,
