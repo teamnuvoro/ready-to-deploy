@@ -46,7 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: user.email,
         gender: user.gender,
         premium: user.premiumUser,
-        persona: user.personalityModel,
         age: user.age,
       });
     }
