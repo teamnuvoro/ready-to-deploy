@@ -14,13 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: string
+          session_id: string
+          tag: string | null
+          text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: string
+          session_id: string
+          tag?: string | null
+          text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: string
+          session_id?: string
+          tag?: string | null
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          duration: number | null
+          ended_at: string | null
+          id: string
+          quality_rating: number | null
+          started_at: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          duration?: number | null
+          ended_at?: string | null
+          id?: string
+          quality_rating?: number | null
+          started_at?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          duration?: number | null
+          ended_at?: string | null
+          id?: string
+          quality_rating?: number | null
+          started_at?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          age: number | null
+          call_duration: number | null
+          created_at: string | null
+          email: string
+          gender: string | null
+          id: string
+          last_active: string | null
+          message_count: number | null
+          name: string
+          password_hash: string | null
+          phone: string | null
+          premium_user: boolean | null
+        }
+        Insert: {
+          age?: number | null
+          call_duration?: number | null
+          created_at?: string | null
+          email: string
+          gender?: string | null
+          id: string
+          last_active?: string | null
+          message_count?: number | null
+          name: string
+          password_hash?: string | null
+          phone?: string | null
+          premium_user?: boolean | null
+        }
+        Update: {
+          age?: number | null
+          call_duration?: number | null
+          created_at?: string | null
+          email?: string
+          gender?: string | null
+          id?: string
+          last_active?: string | null
+          message_count?: number | null
+          name?: string
+          password_hash?: string | null
+          phone?: string | null
+          premium_user?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      set_config: {
+        Args: { parameter: string; value: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
