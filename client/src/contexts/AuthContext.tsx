@@ -27,6 +27,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["/api/auth/session"],
     queryFn: async () => {
+      if (authDisabled) {
+        // In dev mode, return a mock user
+        return {
+          id: "dev",
+          name: "Dev User",
+          email: "dev@example.com",
+          premiumUser: true,
+          gender: "male",
+          age: 25
+        } as User;
+      }
+      
       const res = await fetch("/api/auth/session");
       if (!res.ok) {
         if (res.status === 401) return null;
