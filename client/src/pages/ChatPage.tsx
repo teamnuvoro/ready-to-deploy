@@ -26,9 +26,9 @@ export default function ChatPage() {
   const { data: session, isLoading: isSessionLoading } = useQuery<Session>({
     queryKey: ["/api/session"],
     queryFn: async () => {
-      const res = await fetch("/api/session", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to get session");
-      return res.json();
+      const { data, error } = await supabase.functions.invoke('get-session');
+      if (error) throw error;
+      return data;
     }
   });
 
