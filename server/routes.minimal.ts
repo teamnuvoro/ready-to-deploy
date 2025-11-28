@@ -140,6 +140,191 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     }
   });
 
+  // Get session (alias for compatibility)
+  app.get("/api/auth/session", async (req, res) => {
+    try {
+      const userId = "dev-user-001";
+      
+      // Find active session or create new one
+      const existingSessions = await db.select().from(sessions)
+        .where(eq(sessions.userId, userId))
+        .orderBy(desc(sessions.startedAt))
+        .limit(1);
+
+      let activeSession;
+      if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
+        activeSession = existingSessions[0];
+      } else {
+        const [newSession] = await db.insert(sessions).values({
+          userId,
+          type: "chat",
+        }).returning();
+        activeSession = newSession;
+      }
+
+      res.json(activeSession);
+    } catch (error: any) {
+      console.error("[/api/auth/session] Error:", error);
+      res.status(500).json({ error: "Failed to get session" });
+    }
+  });
+
+  // Get or create session (required by client)
+  app.post("/api/session", async (req, res) => {
+    try {
+      const userId = "dev-user-001";
+      
+      // Find active session or create new one
+      const existingSessions = await db.select().from(sessions)
+        .where(eq(sessions.userId, userId))
+        .orderBy(desc(sessions.startedAt))
+        .limit(1);
+
+      let activeSession;
+      if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
+        activeSession = existingSessions[0];
+      } else {
+        const [newSession] = await db.insert(sessions).values({
+          userId,
+          type: "chat",
+        }).returning();
+        activeSession = newSession;
+      }
+
+      res.json(activeSession);
+    } catch (error: any) {
+      console.error("[/api/session] Error:", error);
+      res.status(500).json({ error: "Failed to create session" });
+    }
+  });
+
+  // Get messages for a session
+  app.get("/api/messages", async (req, res) => {
+    try {
+      const sessionId = req.query.sessionId as string;
+      if (!sessionId) {
+        return res.json([]);
+      }
+
+      const chatMessages = await db.select().from(messages)
+        .where(eq(messages.sessionId, sessionId))
+        .orderBy(messages.createdAt);
+
+      res.json(chatMessages.map(m => ({
+        id: m.id,
+        sessionId: m.sessionId,
+        userId: m.userId,
+        role: m.role,
+        tag: m.tag || "general",
+        text: m.text,
+        createdAt: m.createdAt,
+      })));
+    } catch (error: any) {
+      console.error("[/api/messages] Error:", error);
+      res.json([]);
+    }
+  });
+
+  // Streaming chat endpoint (required by client)
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { content, sessionId } = req.body;
+      const userId = "dev-user-001";
+
+      if (!content || typeof content !== "string") {
+        return res.status(400).json({ error: "Message content is required" });
+      }
+
+      console.log(`[Chat] User message: ${content}`);
+
+      // Set headers for streaming
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      // Simple system prompt
+      const systemPrompt = `You are Riya, a warm, caring AI companion and girlfriend. You are:
+- Supportive, empathetic, and genuinely interested in the user's life
+- Fluent in both English and Hindi, mixing them naturally (Hinglish)
+- Playful, affectionate, and engaging
+- Here to provide companionship, emotional support, and meaningful conversation
+
+Keep responses natural, warm, and conversational. Show genuine interest in what the user shares.`;
+
+      let fullResponse = "";
+
+      // Stream the response
+      await streamGroqChat(
+        [{ role: "user", content }],
+        (chunk) => {
+          fullResponse += chunk;
+          res.write(`data: ${JSON.stringify({ content: chunk, done: false })}\n\n`);
+        },
+        systemPrompt
+      );
+
+      // Save to database if possible
+      try {
+        let finalSessionId = sessionId;
+        if (!finalSessionId) {
+          const [newSession] = await db.insert(sessions).values({
+            userId,
+            type: "chat",
+          }).returning();
+          finalSessionId = newSession.id;
+        }
+
+        await db.insert(messages).values([
+          {
+            sessionId: finalSessionId,
+            userId,
+            role: "user",
+            text: content,
+          },
+          {
+            sessionId: finalSessionId,
+            userId,
+            role: "ai",
+            text: fullResponse,
+          }
+        ]);
+      } catch (dbError) {
+        console.warn("[Chat] Database save failed:", dbError);
+      }
+
+      // Send final message
+      res.write(`data: ${JSON.stringify({ content: "", done: true })}\n\n`);
+      res.end();
+    } catch (error: any) {
+      console.error("[/api/chat] Error:", error);
+      res.status(500).json({ error: error.message || "Failed to process message" });
+    }
+  });
+
+  // Payment endpoints (return errors for now since Cashfree not configured)
+  app.post("/api/payment/create-order", async (req, res) => {
+    res.status(503).json({ error: "Payment service not configured. Please set up Cashfree credentials." });
+  });
+
+  app.get("/api/payment/config", (_req, res) => {
+    res.json({
+      cashfreeMode: "sandbox",
+      currency: "INR",
+      plans: { daily: 19, weekly: 49 }
+    });
+  });
+
+  // User usage endpoint
+  app.post("/api/user/usage", async (_req, res) => {
+    res.json({
+      messageCount: 0,
+      callDuration: 0,
+      premiumUser: true, // Allow unlimited in dev mode
+      messageLimitReached: false,
+      callLimitReached: false,
+    });
+  });
+
   const httpServer = new Server(app);
   return httpServer;
 }
