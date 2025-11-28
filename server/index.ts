@@ -16,6 +16,19 @@ import { ProfilingIntegration } from "@sentry/profiling-node";
 import { requestTracer } from './middleware/requestTracer';
 import { globalErrorHandler } from './middleware/errorHandler';
 
+// Global error handlers for startup robustness
+process.on('uncaughtException', (err) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', err);
+  // Don't exit immediately in dev to allow debugging, but in prod we might want to restart
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Critical error, but keeping process alive to report logs...');
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION:', reason);
+});
+
 const app = express();
 
 // 1. Initialize Sentry (Top of file)

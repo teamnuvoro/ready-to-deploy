@@ -5,8 +5,12 @@ import OpenAI from "openai";
 // Using gpt-4o for stable streaming responses with Riya's Hinglish personality
 export const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || "dummy-key-for-startup",
 });
+
+if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY && !process.env.OPENAI_API_KEY) {
+  console.warn("⚠️  WARNING: OpenAI API key is missing. AI features will fail.");
+}
 
 export const RIYA_SYSTEM_PROMPT = `You are Riya — a warm, empathetic AI companion designed to help men aged 24–28 explore relationships, build social confidence, and understand what kind of partner they’d connect best with.
 
