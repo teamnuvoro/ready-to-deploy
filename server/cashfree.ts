@@ -4,17 +4,33 @@ import {
   getCashfreeCredentials,
 } from "./config";
 
-const { appId: CASHFREE_APP_ID, secretKey: CASHFREE_SECRET_KEY } =
-  getCashfreeCredentials();
-const CASHFREE_BASE_URL = getCashfreeBaseUrl();
+// Load credentials dynamically to ensure they're always fresh
+function getCredentials() {
+  return getCashfreeCredentials();
+}
+
+function getBaseUrl() {
+  return getCashfreeBaseUrl();
+}
 
 function getHeaders(extra: Record<string, string> = {}) {
-  return {
-    "x-client-id": CASHFREE_APP_ID,
-    "x-client-secret": CASHFREE_SECRET_KEY,
+  const { appId, secretKey } = getCredentials();
+  const headers = {
+    "x-client-id": appId,
+    "x-client-secret": secretKey,
     "x-api-version": "2023-08-01",
     ...extra,
   };
+  
+  // Log headers (without exposing full secret)
+  console.log('[Cashfree] Request headers:', {
+    'x-client-id': headers["x-client-id"] ? `${headers["x-client-id"].substring(0, 10)}...` : 'MISSING',
+    'x-client-id-full': headers["x-client-id"] || 'EMPTY',
+    'x-client-secret': headers["x-client-secret"] ? `${headers["x-client-secret"].substring(0, 10)}...` : 'MISSING',
+    'x-api-version': headers["x-api-version"],
+  });
+  
+  return headers;
 }
 
 // Helper function to parse Cashfree error responses
@@ -59,18 +75,39 @@ function parseCashfreeError(errorResponse: any, defaultMessage: string): string 
 
 // Validate Cashfree credentials
 function validateCredentials(): { valid: boolean; error?: string } {
-  const hasAppId = CASHFREE_APP_ID && CASHFREE_APP_ID.trim().length > 0 && CASHFREE_APP_ID !== "TEST_APP_ID";
-  const hasSecretKey = CASHFREE_SECRET_KEY && CASHFREE_SECRET_KEY.trim().length > 0;
+  const { appId, secretKey } = getCredentials();
+  const hasAppId = appId && appId.trim().length > 0 && appId !== "TEST_APP_ID";
+  const hasSecretKey = secretKey && secretKey.trim().length > 0;
+  
+  // Diagnostic logging
+  console.log('[Cashfree] Credential validation:', {
+    mode: cashfreeMode,
+    hasAppId,
+    appIdLength: appId?.length || 0,
+    appIdPrefix: appId ? appId.substring(0, 10) + '...' : 'MISSING',
+    appIdValue: appId || 'EMPTY',
+    hasSecretKey,
+    secretKeyLength: secretKey?.length || 0,
+    secretKeyPrefix: secretKey ? secretKey.substring(0, 10) + '...' : 'MISSING',
+    envVarsPresent: {
+      CASHFREE_APP_ID: !!process.env.CASHFREE_APP_ID,
+      CASHFREE_SECRET_KEY: !!process.env.CASHFREE_SECRET_KEY,
+      CASHFREE_ENV: process.env.CASHFREE_ENV || 'NOT SET',
+    }
+  });
   
   if (!hasAppId || !hasSecretKey) {
+    const errorMsg = cashfreeMode === "sandbox" 
+      ? "Cashfree credentials not configured. Please set CASHFREE_APP_ID and CASHFREE_SECRET_KEY in your .env file."
+      : "Cashfree production credentials not configured.";
+    console.error('[Cashfree] Credential validation failed:', errorMsg);
     return {
       valid: false,
-      error: cashfreeMode === "sandbox" 
-        ? "Cashfree credentials not configured. Please set CASHFREE_APP_ID and CASHFREE_SECRET_KEY in your .env file."
-        : "Cashfree production credentials not configured."
+      error: errorMsg
     };
   }
   
+  console.log('[Cashfree] ✅ Credentials validated successfully');
   return { valid: true };
 }
 
@@ -131,10 +168,26 @@ export async function createCashfreeOrder(params: CreateOrderParams): Promise<Ca
       payload.order_meta.notify_url = process.env.CASHFREE_WEBHOOK_URL;
     }
 
-    const response = await fetch(`${CASHFREE_BASE_URL}/orders`, {
+    const requestUrl = `${getBaseUrl()}/orders`;
+    const requestHeaders = getHeaders({ "Content-Type": "application/json" });
+    
+    console.log('[Cashfree] Creating order:', {
+      url: requestUrl,
+      mode: cashfreeMode,
+      orderId: params.orderId,
+      orderAmount: params.orderAmount,
+    });
+    
+    const response = await fetch(requestUrl, {
       method: "POST",
-      headers: getHeaders({ "Content-Type": "application/json" }),
+      headers: requestHeaders,
       body: JSON.stringify(payload),
+    });
+    
+    console.log('[Cashfree] Order creation response:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
     });
 
     if (!response.ok) {
@@ -194,7 +247,7 @@ export async function getCashfreePaymentStatus(orderId: string): Promise<Cashfre
   }
 
   try {
-    const response = await fetch(`${CASHFREE_BASE_URL}/orders/${orderId}`, {
+    const response = await fetch(`${getBaseUrl()}/orders/${orderId}`, {
       headers: getHeaders(),
     });
 
@@ -291,7 +344,7 @@ export async function createCashfreePaymentLink(params: CreatePaymentLinkParams)
       requestBody.customer_details = customerDetails;
     }
 
-    const response = await fetch(`${CASHFREE_BASE_URL}/links`, {
+    const response = await fetch(`${getBaseUrl()}/links`, {
       method: "POST",
       headers: getHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(requestBody),
