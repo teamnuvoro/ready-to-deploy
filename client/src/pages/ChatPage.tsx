@@ -68,12 +68,15 @@ export default function ChatPage() {
       abortControllerRef.current = new AbortController();
 
       try {
-        const response = await fetch("/api/chat", {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseKey}`,
           },
-          // GENIUS MOVE: We send the persona ID *with* the message.
           body: JSON.stringify({ content, sessionId: session.id }),
           signal: abortControllerRef.current.signal,
         });
