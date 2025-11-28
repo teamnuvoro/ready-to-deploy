@@ -5,6 +5,9 @@ import { db } from "./db";
 import { sessions, messages } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
+// Simple in-memory session store for when DB is not available
+const inMemorySessions = new Map<string, any>();
+
 export function registerRoutes(app: Express): Server {
   // Health check
   app.get("/api/health", (_req, res) => {
@@ -145,6 +148,28 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const userId = "dev-user-001";
       
+      // Check if database is available
+      if (!db) {
+        // Use in-memory session store
+        const existingSession = inMemorySessions.get(userId);
+        if (existingSession && !existingSession.endedAt) {
+          return res.json(existingSession);
+        }
+        
+        // Create new in-memory session
+        const newSession = {
+          id: `in-memory-${userId}-${Date.now()}`,
+          userId,
+          type: "chat",
+          startedAt: new Date(),
+          endedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        inMemorySessions.set(userId, newSession);
+        return res.json(newSession);
+      }
+
       // Find active session or create new one
       const existingSessions = await db.select().from(sessions)
         .where(eq(sessions.userId, userId))
@@ -165,7 +190,18 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
       res.json(activeSession);
     } catch (error: any) {
       console.error("[/api/auth/session] Error:", error);
-      res.status(500).json({ error: "Failed to get session" });
+      // Fallback to in-memory session on error
+      const fallbackSession = {
+        id: `fallback-${userId}-${Date.now()}`,
+        userId,
+        type: "chat",
+        startedAt: new Date(),
+        endedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      inMemorySessions.set(userId, fallbackSession);
+      res.json(fallbackSession);
     }
   });
 
@@ -174,6 +210,28 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const userId = "dev-user-001";
       
+      // Check if database is available
+      if (!db) {
+        // Use in-memory session store
+        const existingSession = inMemorySessions.get(userId);
+        if (existingSession && !existingSession.endedAt) {
+          return res.json(existingSession);
+        }
+        
+        // Create new in-memory session
+        const newSession = {
+          id: `in-memory-${userId}-${Date.now()}`,
+          userId,
+          type: "chat",
+          startedAt: new Date(),
+          endedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        inMemorySessions.set(userId, newSession);
+        return res.json(newSession);
+      }
+
       // Find active session or create new one
       const existingSessions = await db.select().from(sessions)
         .where(eq(sessions.userId, userId))
@@ -194,7 +252,18 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
       res.json(activeSession);
     } catch (error: any) {
       console.error("[/api/session] Error:", error);
-      res.status(500).json({ error: "Failed to create session" });
+      // Fallback to in-memory session on error
+      const fallbackSession = {
+        id: `fallback-${userId}-${Date.now()}`,
+        userId,
+        type: "chat",
+        startedAt: new Date(),
+        endedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      inMemorySessions.set(userId, fallbackSession);
+      res.json(fallbackSession);
     }
   });
 
@@ -203,6 +272,11 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const sessionId = req.query.sessionId as string;
       if (!sessionId) {
+        return res.json([]);
+      }
+
+      // If database is not available, return empty messages
+      if (!db) {
         return res.json([]);
       }
 
