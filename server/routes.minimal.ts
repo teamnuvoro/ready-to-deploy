@@ -79,31 +79,10 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
   // Get chat history
   app.get("/api/chat/history", async (req, res) => {
     try {
-      const userId = "dev-user-001";
-
-      const userSessions = await db.select().from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
-
-      if (userSessions.length === 0) {
-        return res.json({ messages: [] });
-      }
-
-      const chatMessages = await db.select().from(messages)
-        .where(eq(messages.sessionId, userSessions[0].id))
-        .orderBy(messages.createdAt);
-
-      res.json({
-        messages: chatMessages.map(m => ({
-          role: m.role,
-          content: m.text,
-          timestamp: m.createdAt
-        }))
-      });
+      // Return empty history for in-memory mode
+      res.json({ messages: [] });
     } catch (error: any) {
       console.error("[/api/chat/history] Error:", error);
-      // Return empty history if database not available
       res.json({ messages: [] });
     }
   });
@@ -134,24 +113,13 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const userId = "dev-user-001";
       
-      // Find active session or create new one
-      const existingSessions = await db.select().from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
-
-      let activeSession;
-      if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
-        activeSession = existingSessions[0];
-      } else {
-        const [newSession] = await db.insert(sessions).values({
-          userId,
-          type: "chat",
-        }).returning();
-        activeSession = newSession;
-      }
-
-      res.json(activeSession);
+      res.json({
+        id: "dev-session-001",
+        userId,
+        type: "chat",
+        startedAt: new Date(),
+        endedAt: null
+      });
     } catch (error: any) {
       console.error("[/api/session] Error:", error);
       res.status(500).json({ error: "Failed to create session" });
@@ -161,24 +129,8 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
   // Get messages for a session
   app.get("/api/messages", async (req, res) => {
     try {
-      const sessionId = req.query.sessionId as string;
-      if (!sessionId) {
-        return res.json([]);
-      }
-
-      const chatMessages = await db.select().from(messages)
-        .where(eq(messages.sessionId, sessionId))
-        .orderBy(messages.createdAt);
-
-      res.json(chatMessages.map(m => ({
-        id: m.id,
-        sessionId: m.sessionId,
-        userId: m.userId,
-        role: m.role,
-        tag: m.tag || "general",
-        text: m.text,
-        createdAt: m.createdAt,
-      })));
+      // Return empty array for now (in-memory mode)
+      res.json([]);
     } catch (error: any) {
       console.error("[/api/messages] Error:", error);
       res.json([]);
@@ -225,29 +177,8 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
 
       // Save to database if possible
       try {
-        let finalSessionId = sessionId;
-        if (!finalSessionId) {
-          const [newSession] = await db.insert(sessions).values({
-            userId,
-            type: "chat",
-          }).returning();
-          finalSessionId = newSession.id;
-        }
-
-        await db.insert(messages).values([
-          {
-            sessionId: finalSessionId,
-            userId,
-            role: "user",
-            text: content,
-          },
-          {
-            sessionId: finalSessionId,
-            userId,
-            role: "ai",
-            text: fullResponse,
-          }
-        ]);
+        let finalSessionId = sessionId || "dev-session-001";
+        console.log("[Chat] Skipping database save (in-memory mode)");
       } catch (dbError) {
         console.warn("[Chat] Database save failed:", dbError);
       }
