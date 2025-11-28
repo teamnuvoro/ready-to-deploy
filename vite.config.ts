@@ -35,7 +35,7 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: devPort,
+    port: 8080,
     fs: {
       strict: true,
       deny: [".env", ".env.*", "*.{crt,pem,key}"],
