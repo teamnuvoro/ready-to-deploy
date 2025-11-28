@@ -105,9 +105,30 @@ export function PaywallSheet({ open, onOpenChange, messageCount }: PaywallSheetP
 
     } catch (error: any) {
       console.error('Payment error:', error);
+      
+      // Extract error message from various formats
+      let errorMessage = "Failed to initiate payment";
+      if (error?.message) {
+        const msg = error.message;
+        // Handle format: "500: {"error":"..."} (Trace ID: ...)"
+        const jsonMatch = msg.match(/\{[\s\S]*"error"[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const errorObj = JSON.parse(jsonMatch[0]);
+            errorMessage = errorObj.error || errorObj.message || msg;
+          } catch {
+            // If JSON parse fails, try to extract text after "error"
+            const errorMatch = msg.match(/"error"\s*:\s*"([^"]+)"/);
+            errorMessage = errorMatch ? errorMatch[1] : msg;
+          }
+        } else {
+          errorMessage = msg;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error.message || "Failed to initiate payment",
+        title: "Payment Error",
+        description: errorMessage,
         variant: "destructive",
       });
       setIsProcessing(false);
