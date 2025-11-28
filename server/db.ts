@@ -5,7 +5,7 @@ import * as schema from "@shared/schema";
 const { Pool } = pg;
 
 export const forceInMemoryStorage =
-  process.env.USE_IN_MEMORY_STORAGE?.toLowerCase() === "true";
+  process.env.USE_IN_MEMORY_STORAGE?.toLowerCase() === "true" || !process.env.DATABASE_URL;
 export const hasDatabaseUrl = Boolean(process.env.DATABASE_URL) && !forceInMemoryStorage;
 
 let dbInstance: ReturnType<typeof drizzle> | null = null;

@@ -5,9 +5,6 @@ import { db } from "./db";
 import { sessions, messages } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
-// Simple in-memory session store for when DB is not available
-const inMemorySessions = new Map<string, any>();
-
 export function registerRoutes(app: Express): Server {
   // Health check
   app.get("/api/health", (_req, res) => {
@@ -17,11 +14,14 @@ export function registerRoutes(app: Express): Server {
   // Get user info
   app.get("/api/user", async (req, res) => {
     try {
-      const userId = "dev-user-001"; // Dev user when DISABLE_AUTH=true
+      const userId = "dev-user-001";
       res.json({
         id: userId,
         name: "Dev User",
-        email: "dev@example.com"
+        email: "dev@example.com",
+        premiumUser: true,
+        gender: "male",
+        age: 25
       });
     } catch (error: any) {
       console.error("[/api/user] Error:", error);
@@ -63,43 +63,8 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
 
       console.log(`[Chat] AI response: ${aiResponse}`);
 
-      // Try to save to database if available, but don't fail if it's not
-      try {
-        // Create or get session
-        let sessionId: string;
-        const existingSessions = await db.select().from(sessions)
-          .where(eq(sessions.userId, userId))
-          .orderBy(desc(sessions.startedAt))
-          .limit(1);
-
-        if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
-          sessionId = existingSessions[0].id;
-        } else {
-          const [newSession] = await db.insert(sessions).values({
-            userId,
-            type: "chat",
-          }).returning();
-          sessionId = newSession.id;
-        }
-
-        // Save messages
-        await db.insert(messages).values([
-          {
-            sessionId,
-            userId,
-            role: "user",
-            text: message,
-          },
-          {
-            sessionId,
-            userId,
-            role: "ai",
-            text: aiResponse,
-          }
-        ]);
-      } catch (dbError) {
-        console.warn("[Chat] Database save failed (using in-memory mode):", dbError);
-      }
+      // Skip database save in minimal mode
+      console.log("[Chat] Skipping database save (in-memory mode)");
 
       res.json({
         response: aiResponse,
@@ -114,31 +79,10 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
   // Get chat history
   app.get("/api/chat/history", async (req, res) => {
     try {
-      const userId = "dev-user-001";
-
-      const userSessions = await db.select().from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
-
-      if (userSessions.length === 0) {
-        return res.json({ messages: [] });
-      }
-
-      const chatMessages = await db.select().from(messages)
-        .where(eq(messages.sessionId, userSessions[0].id))
-        .orderBy(messages.createdAt);
-
-      res.json({
-        messages: chatMessages.map(m => ({
-          role: m.role,
-          content: m.text,
-          timestamp: m.createdAt
-        }))
-      });
+      // Return empty history for in-memory mode
+      res.json({ messages: [] });
     } catch (error: any) {
       console.error("[/api/chat/history] Error:", error);
-      // Return empty history if database not available
       res.json({ messages: [] });
     }
   });
@@ -148,60 +92,19 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const userId = "dev-user-001";
       
-      // Check if database is available
-      if (!db) {
-        // Use in-memory session store
-        const existingSession = inMemorySessions.get(userId);
-        if (existingSession && !existingSession.endedAt) {
-          return res.json(existingSession);
-        }
-        
-        // Create new in-memory session
-        const newSession = {
-          id: `in-memory-${userId}-${Date.now()}`,
-          userId,
-          type: "chat",
-          startedAt: new Date(),
-          endedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        inMemorySessions.set(userId, newSession);
-        return res.json(newSession);
-      }
-
-      // Find active session or create new one
-      const existingSessions = await db.select().from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
-
-      let activeSession;
-      if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
-        activeSession = existingSessions[0];
-      } else {
-        const [newSession] = await db.insert(sessions).values({
-          userId,
-          type: "chat",
-        }).returning();
-        activeSession = newSession;
-      }
-
-      res.json(activeSession);
-    } catch (error: any) {
-      console.error("[/api/auth/session] Error:", error);
-      // Fallback to in-memory session on error
-      const fallbackSession = {
-        id: `fallback-${userId}-${Date.now()}`,
+      // Return a session object (client expects Session, not User)
+      res.json({
+        id: "dev-session-001",
         userId,
         type: "chat",
         startedAt: new Date(),
         endedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
-      inMemorySessions.set(userId, fallbackSession);
-      res.json(fallbackSession);
+      });
+    } catch (error: any) {
+      console.error("[/api/auth/session] Error:", error);
+      res.status(500).json({ error: "Failed to get session" });
     }
   });
 
@@ -210,89 +113,24 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
     try {
       const userId = "dev-user-001";
       
-      // Check if database is available
-      if (!db) {
-        // Use in-memory session store
-        const existingSession = inMemorySessions.get(userId);
-        if (existingSession && !existingSession.endedAt) {
-          return res.json(existingSession);
-        }
-        
-        // Create new in-memory session
-        const newSession = {
-          id: `in-memory-${userId}-${Date.now()}`,
-          userId,
-          type: "chat",
-          startedAt: new Date(),
-          endedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        inMemorySessions.set(userId, newSession);
-        return res.json(newSession);
-      }
-
-      // Find active session or create new one
-      const existingSessions = await db.select().from(sessions)
-        .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.startedAt))
-        .limit(1);
-
-      let activeSession;
-      if (existingSessions.length > 0 && !existingSessions[0].endedAt) {
-        activeSession = existingSessions[0];
-      } else {
-        const [newSession] = await db.insert(sessions).values({
-          userId,
-          type: "chat",
-        }).returning();
-        activeSession = newSession;
-      }
-
-      res.json(activeSession);
-    } catch (error: any) {
-      console.error("[/api/session] Error:", error);
-      // Fallback to in-memory session on error
-      const fallbackSession = {
-        id: `fallback-${userId}-${Date.now()}`,
+      res.json({
+        id: "dev-session-001",
         userId,
         type: "chat",
         startedAt: new Date(),
-        endedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      inMemorySessions.set(userId, fallbackSession);
-      res.json(fallbackSession);
+        endedAt: null
+      });
+    } catch (error: any) {
+      console.error("[/api/session] Error:", error);
+      res.status(500).json({ error: "Failed to create session" });
     }
   });
 
   // Get messages for a session
   app.get("/api/messages", async (req, res) => {
     try {
-      const sessionId = req.query.sessionId as string;
-      if (!sessionId) {
-        return res.json([]);
-      }
-
-      // If database is not available, return empty messages
-      if (!db) {
-        return res.json([]);
-      }
-
-      const chatMessages = await db.select().from(messages)
-        .where(eq(messages.sessionId, sessionId))
-        .orderBy(messages.createdAt);
-
-      res.json(chatMessages.map(m => ({
-        id: m.id,
-        sessionId: m.sessionId,
-        userId: m.userId,
-        role: m.role,
-        tag: m.tag || "general",
-        text: m.text,
-        createdAt: m.createdAt,
-      })));
+      // Return empty array for now (in-memory mode)
+      res.json([]);
     } catch (error: any) {
       console.error("[/api/messages] Error:", error);
       res.json([]);
@@ -339,29 +177,8 @@ Keep responses natural, warm, and conversational. Show genuine interest in what 
 
       // Save to database if possible
       try {
-        let finalSessionId = sessionId;
-        if (!finalSessionId) {
-          const [newSession] = await db.insert(sessions).values({
-            userId,
-            type: "chat",
-          }).returning();
-          finalSessionId = newSession.id;
-        }
-
-        await db.insert(messages).values([
-          {
-            sessionId: finalSessionId,
-            userId,
-            role: "user",
-            text: content,
-          },
-          {
-            sessionId: finalSessionId,
-            userId,
-            role: "ai",
-            text: fullResponse,
-          }
-        ]);
+        let finalSessionId = sessionId || "dev-session-001";
+        console.log("[Chat] Skipping database save (in-memory mode)");
       } catch (dbError) {
         console.warn("[Chat] Database save failed:", dbError);
       }
