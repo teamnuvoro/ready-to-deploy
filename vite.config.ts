@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { componentTagger } from "lovable-tagger";
 
 const devPort = Number(process.env.PORT || 3000);
 
@@ -9,6 +10,7 @@ export default defineConfig({
   plugins: [
     react(),
     runtimeErrorOverlay(),
+    componentTagger(),
     ...(process.env.NODE_ENV !== "production" &&
       process.env.REPL_ID !== undefined
       ? [
