@@ -544,6 +544,112 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ============================================
+  // AUTH ENDPOINTS - SIGNUP & OTP
+  // ============================================
+
+  // Simple in-memory OTP store for dev mode
+  const otpStore = new Map<string, { otp: string; expiresAt: Date; userId?: string }>();
+
+  // Signup endpoint
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { name, phone, gender } = req.body;
+
+      if (!name || !phone || !gender) {
+        return res.status(400).json({ error: "Name, phone, and gender are required" });
+      }
+
+      // Generate user ID
+      const userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // In dev mode, create user if DB available
+      if (db) {
+        try {
+          const [newUser] = await db.insert(users).values({
+            id: userId,
+            name,
+            gender,
+            premiumUser: false,
+          }).returning();
+          
+          console.log(`[Auth] User created: ${userId}`);
+        } catch (dbError) {
+          console.warn("[Auth] Failed to save user to DB:", dbError);
+        }
+      }
+
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Store OTP
+      otpStore.set(phone, { otp, expiresAt, userId });
+
+      console.log(`[Auth] OTP sent to ${phone}: ${otp} (expires in 10 minutes)`);
+
+      res.json({
+        success: true,
+        message: "OTP sent to your phone",
+        userId,
+        phone,
+        // In dev mode, return OTP for testing
+        ...(process.env.NODE_ENV === "development" && { otp, note: "OTP shown in dev mode only" }),
+      });
+    } catch (error: any) {
+      console.error("[/api/auth/signup] Error:", error);
+      res.status(500).json({ error: "Signup failed" });
+    }
+  });
+
+  // Verify OTP endpoint
+  app.post("/api/auth/verify-otp", async (req, res) => {
+    try {
+      const { phone, otp } = req.body;
+
+      if (!phone || !otp) {
+        return res.status(400).json({ error: "Phone and OTP are required" });
+      }
+
+      const storedData = otpStore.get(phone);
+
+      if (!storedData) {
+        return res.status(400).json({ error: "Invalid or expired OTP. Please request a new one." });
+      }
+
+      if (new Date() > storedData.expiresAt) {
+        otpStore.delete(phone);
+        return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+      }
+
+      if (storedData.otp !== otp) {
+        return res.status(400).json({ error: "Invalid OTP. Please try again." });
+      }
+
+      // OTP verified - get or create user
+      const userId = storedData.userId || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Clean up OTP
+      otpStore.delete(phone);
+
+      // Store userId in localStorage (will be handled by client)
+      console.log(`[Auth] OTP verified for user: ${userId}`);
+
+      res.json({
+        success: true,
+        message: "OTP verified successfully",
+        user: {
+          id: userId,
+          phone,
+        },
+        token: `dev-token-${userId}`, // Simple token for dev mode
+      });
+    } catch (error: any) {
+      console.error("[/api/auth/verify-otp] Error:", error);
+      res.status(500).json({ error: "OTP verification failed" });
+    }
+  });
+
   const httpServer = new Server(app);
   return httpServer;
 }
