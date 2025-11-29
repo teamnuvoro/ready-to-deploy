@@ -23,6 +23,7 @@ export function ChatMessage({ message, onReaction }: ChatMessageProps) {
     <div 
       className={`flex ${isAI ? 'justify-start pl-2' : 'justify-end pr-1'} mb-4`}
       data-testid={`message-${message.role}-${message.id}`}
+      data-message
     >
       <div className="relative group">
         <div 

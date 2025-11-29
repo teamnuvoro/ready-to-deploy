@@ -145,15 +145,14 @@ export function ChatMessages({
             </div>
           )}
           {messages.map((message) => (
-            <div key={message.id} data-message>
-              <ChatMessage 
-                message={message}
-                onReaction={(messageId, reaction) => {
-                  // Handle reaction - could save to backend in future
-                  console.log(`Reaction ${reaction} on message ${messageId}`);
-                }}
-              />
-            </div>
+            <ChatMessage 
+              key={message.id} 
+              message={message}
+              onReaction={(messageId, reaction) => {
+                // Handle reaction - could save to backend in future
+                console.log(`Reaction ${reaction} on message ${messageId}`);
+              }}
+            />
           ))}
 
           {showQuickRepliesCondition && displayQuickReplies.length > 0 && (
