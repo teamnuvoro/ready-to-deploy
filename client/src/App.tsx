@@ -16,7 +16,7 @@ import MemoriesPage from "@/pages/MemoriesPage";
 import GalleryPage from "@/pages/GalleryPage";
 import LandingPage from "@/pages/LandingPage";
 import OnboardingPage from "@/pages/OnboardingPage";
-
+import PersonalityCarouselPage from "@/pages/PersonalityCarouselPage";
 
 import SignupPage from "@/pages/SignupPage";
 import LoginPage from "@/pages/LoginPage";
@@ -64,6 +64,9 @@ function Router() {
       {/* Onboarding Flow */}
       <Route path="/onboarding">
         {() => <ProtectedRoute component={OnboardingPage} />}
+      </Route>
+      <Route path="/personality-selection">
+        {() => <ProtectedRoute component={PersonalityCarouselPage} />}
       </Route>
 
 

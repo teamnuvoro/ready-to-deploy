@@ -10,24 +10,29 @@ export function ChatMessage({ message }: ChatMessageProps) {
   
   return (
     <div 
-      className={`flex ${isAI ? 'justify-start' : 'justify-end'} mb-4`}
+      className={`flex ${isAI ? 'justify-start pl-2' : 'justify-end pr-1'} mb-4`}
       data-testid={`message-${message.role}-${message.id}`}
     >
-      <div className={`max-w-[80%] ${isAI ? 'items-start' : 'items-end'} flex flex-col`}>
+      <div className="relative group">
         <div 
-          className={`chat-bubble rounded-2xl px-4 py-3 ${
+          className={`max-w-[75%] rounded-2xl px-4 py-3 ${
             isAI 
-              ? 'chat-bubble-ai' 
-              : 'chat-bubble-user'
+              ? 'bg-white text-gray-800 shadow-md rounded-tl-sm' 
+              : 'bg-purple-600 text-white rounded-tr-sm'
           }`}
         >
           <p className="text-base leading-relaxed whitespace-pre-wrap" data-testid={`text-message-content-${message.id}`}>
             {message.text}
           </p>
+          <p 
+            className={`text-xs mt-1 ${
+              isAI ? "text-gray-500" : "text-white/70"
+            }`}
+            data-testid={`text-timestamp-${message.id}`}
+          >
+            {message.createdAt ? format(new Date(message.createdAt), 'h:mm a') : ''}
+          </p>
         </div>
-        <span className="text-xs text-muted-foreground mt-1 px-1" data-testid={`text-timestamp-${message.id}`}>
-          {message.createdAt ? format(new Date(message.createdAt), 'h:mm a') : ''}
-        </span>
       </div>
     </div>
   );

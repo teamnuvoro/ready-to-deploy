@@ -6,11 +6,12 @@ import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { VoiceCallButton } from "@/components/chat/VoiceCallButton";
 import { PaywallSheet } from "@/components/paywall/PaywallSheet";
+import { AnalysisScreen } from "@/components/analysis/AnalysisScreen";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { CreditCard, ShieldCheck } from "lucide-react";
+import { CreditCard, ShieldCheck, Sparkles } from "lucide-react";
 
 import { analytics } from "@/lib/analytics";
 
@@ -18,6 +19,7 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -285,15 +287,36 @@ export default function ChatPage() {
           </div>
         </div>
         <div className="flex-1 overflow-hidden flex flex-col relative">
-          <ChatMessages
-            messages={displayMessages}
-            isLoading={isLoading}
-            streamingMessage={streamingMessage}
-            isTyping={isTyping && !streamingMessage}
-            quickReplies={[]}
-            onQuickReply={handleSendMessage}
-          />
+          {showAnalysis ? (
+            <AnalysisScreen
+              aiName="Riya"
+              userName={user?.name || "User"}
+              onClose={() => setShowAnalysis(false)}
+            />
+          ) : (
+            <ChatMessages
+              messages={displayMessages}
+              isLoading={isLoading}
+              streamingMessage={streamingMessage}
+              isTyping={isTyping && !streamingMessage}
+              quickReplies={[]}
+              onQuickReply={handleSendMessage}
+            />
+          )}
         </div>
+
+        {/* Analyze Button */}
+        {!showAnalysis && (
+          <div className="px-4 py-2 bg-purple-50 border-t border-purple-100">
+            <Button
+              onClick={() => setShowAnalysis(true)}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Analyze My Type
+            </Button>
+          </div>
+        )}
 
         {/* Paywall Banner when locked */}
         {isLimitReached && (
