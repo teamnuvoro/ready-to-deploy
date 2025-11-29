@@ -1,1 +1,10 @@
 project_id = "pwhgkaqidnspmnbrfalk"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.get-session]
+verify_jwt = false
+
+[functions.get-messages]
+verify_jwt = false

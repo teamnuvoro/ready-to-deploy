@@ -26,17 +26,55 @@ export default function ChatPage() {
   const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
 
   const { data: session, isLoading: isSessionLoading } = useQuery<Session>({
-    queryKey: ["/api/session"],
+    queryKey: ["session"],
     queryFn: async () => {
-      const res = await fetch("/api/session", { method: "POST" });
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        // Fallback to Express API if Supabase not configured
+        const res = await fetch("/api/session", { method: "POST" });
+        if (!res.ok) throw new Error("Failed to get session");
+        return res.json();
+      }
+      
+      const res = await fetch(`${supabaseUrl}/functions/v1/get-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({ userId: user?.id || "dev-user-001" }),
+      });
+      
       if (!res.ok) throw new Error("Failed to get session");
       return res.json();
     }
   });
 
   const { data: messages = [], isLoading: isMessagesLoading } = useQuery<Message[]>({
-    queryKey: ["/api/messages", session?.id],
+    queryKey: ["messages", session?.id],
     enabled: !!session?.id,
+    queryFn: async () => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      if (!supabaseUrl || !supabaseKey || !session?.id) {
+        // Fallback to Express API if Supabase not configured
+        const res = await fetch(`/api/messages?sessionId=${session?.id}`);
+        if (!res.ok) return [];
+        return res.json();
+      }
+      
+      const res = await fetch(`${supabaseUrl}/functions/v1/get-messages?sessionId=${session.id}`, {
+        headers: {
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+      });
+      
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 
   interface UserUsage {
