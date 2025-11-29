@@ -108,117 +108,37 @@ export default function ChatPage() {
       abortControllerRef.current = new AbortController();
 
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        
-        const response = await fetch(`${supabaseUrl}/functions/v1/chat`, {
+        // Use Express API endpoint (simplified MVP)
+        const response = await fetch("/api/chat", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${supabaseKey}`,
           },
-          body: JSON.stringify({ content, sessionId: session.id }),
+          body: JSON.stringify({ 
+            message: content,
+            userId: user?.id || "dev-user-001",
+            sessionId: session.id 
+          }),
           signal: abortControllerRef.current.signal,
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to send message");
-        }
-
-        // Check if response is JSON (limit exceeded) or streaming
-        const contentType = response.headers.get("content-type");
-        if (contentType?.includes("application/json")) {
+        // Handle paywall error
+        if (response.status === 402) {
           const data = await response.json();
-          if (data.limitExceeded) {
-            setIsTyping(false);
-            setPaywallOpen(true);
-            queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-            return;
-          }
+          throw new Error("PAYWALL_HIT");
         }
 
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error("No response body");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to send message");
         }
 
-        let accumulatedMessage = "";
-        let buffer = "";
+        // Get JSON response (non-streaming)
+        const data = await response.json();
+        return data;
 
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            setIsTyping(false);
-            setStreamingMessage("");
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-
-                if (data.done) {
-                  setIsTyping(false);
-                  setStreamingMessage("");
-                  // Safety check before invalidating
-                  if (session?.id) {
-                    queryClient.invalidateQueries({ queryKey: ["/api/messages", session.id] });
-                  }
-                  queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-
-                  // Play voice if enabled
-                  if (voiceModeEnabled && accumulatedMessage) {
-                    try {
-                      const response = await fetch("/api/voice/speak", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          text: accumulatedMessage,
-                          provider: user?.voiceProvider || "elevenlabs",
-                          voiceId: user?.voiceId || "21m00Tcm4TlvDq8ikWAM",
-                          apiKey: user?.elevenLabsApiKey
-                        }),
-                      });
-                      if (response.ok) {
-                        const blob = await response.blob();
-                        const audio = new Audio(URL.createObjectURL(blob));
-                        audio.play();
-                      }
-                    } catch (err) {
-                      console.error("Failed to generate speech:", err);
-                    }
-                  }
-                  return;
-                }
-
-                if (data.content) {
-                  accumulatedMessage += data.content;
-                  setStreamingMessage(accumulatedMessage);
-                }
-              } catch (parseError) {
-                console.error("Error parsing SSE data:", parseError);
-              }
-            }
-          }
-        }
-
-        if (session) {
-          queryClient.invalidateQueries({ queryKey: ["/api/messages", session.id] });
-        }
-        queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
+        // Return the response data
+        return data;
       } catch (error: any) {
         if (error.name === 'AbortError') {
           console.log("Stream aborted by user");
@@ -230,14 +150,36 @@ export default function ChatPage() {
         setStreamingMessage("");
       }
     },
-    onError: (error) => {
+    onSuccess: (data) => {
       setIsTyping(false);
       setStreamingMessage("");
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
+      
+      // Invalidate queries to refresh messages and usage
+      if (session?.id) {
+        queryClient.invalidateQueries({ queryKey: ["messages", session.id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
+    },
+    onError: (error: any) => {
+      setIsTyping(false);
+      setStreamingMessage("");
+      
+      // Handle paywall error
+      if (error.message === "PAYWALL_HIT") {
+        setPaywallOpen(true);
+        toast({
+          title: "Message Limit Reached",
+          description: "You've reached your free message limit! Upgrade to continue chatting.",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to send message. Please try again.",
+          variant: "destructive",
+        });
+      }
       console.error("Chat error:", error);
     },
   });
