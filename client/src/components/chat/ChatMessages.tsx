@@ -64,7 +64,7 @@ export function ChatMessages({
         }} />
       </div>
 
-      <div className="relative z-10 px-4 pt-24 pb-40">
+      <div className="relative z-10 px-4 pt-4 pb-40">
         <div className="max-w-2xl mx-auto">
           {/* Daily Tip Card */}
           {showTip && messages.length === 0 && (

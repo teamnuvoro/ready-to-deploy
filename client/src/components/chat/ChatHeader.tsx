@@ -1,23 +1,28 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Crown, Loader2, LogOut, BarChart3, History, Settings, Brain, Volume2, VolumeX, Image as ImageIcon } from "lucide-react";
+import { ClipboardList, Crown, Loader2, LogOut, BarChart3, History, Settings, Brain, Volume2, VolumeX, Image as ImageIcon, Phone, CreditCard } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
+import { PaywallSheet } from "@/components/paywall/PaywallSheet";
 
 
 interface ChatHeaderProps {
   sessionId?: string;
   voiceModeEnabled?: boolean;
   onVoiceModeToggle?: () => void;
+  onPaymentClick?: () => void;
+  onVoiceCallClick?: () => void;
 }
 
-export function ChatHeader({ sessionId, voiceModeEnabled, onVoiceModeToggle }: ChatHeaderProps) {
+export function ChatHeader({ sessionId, voiceModeEnabled, onVoiceModeToggle, onPaymentClick, onVoiceCallClick }: ChatHeaderProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const { data: userUsage } = useQuery<{
     messageCount: number;
     callDuration: number;
@@ -132,6 +137,42 @@ export function ChatHeader({ sessionId, voiceModeEnabled, onVoiceModeToggle }: C
             </div>
           )}
 
+          {/* Voice Call Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (onVoiceCallClick) {
+                onVoiceCallClick();
+              } else {
+                setLocation("/call");
+              }
+            }}
+            className="h-8 gap-1.5 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 rounded-full"
+            title="Voice Call"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Call</span>
+          </Button>
+
+          {/* Payment/Upgrade Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (onPaymentClick) {
+                onPaymentClick();
+              } else {
+                setPaywallOpen(true);
+              }
+            }}
+            className="h-8 gap-1.5 text-xs border-purple-200 text-purple-700 hover:bg-purple-50 rounded-full"
+            title="Upgrade to Premium"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Upgrade</span>
+          </Button>
+
           {/* Voice Toggle */}
           {onVoiceModeToggle && (
             <Button
@@ -179,6 +220,11 @@ export function ChatHeader({ sessionId, voiceModeEnabled, onVoiceModeToggle }: C
           </Button>
         </div>
       </div>
+      <PaywallSheet
+        open={paywallOpen}
+        onOpenChange={setPaywallOpen}
+        messageCount={userUsage?.messageCount || 0}
+      />
     </header>
   );
 }

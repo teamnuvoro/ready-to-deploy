@@ -6,7 +6,6 @@ import { AnalysisScreen } from "@/components/analysis/AnalysisScreen";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { VoiceCallButton } from "@/components/chat/VoiceCallButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -208,21 +207,24 @@ const ChatPage = () => {
   // ============================================
   return (
     <div className="chat-shell">
+      {/* Fixed Header */}
+      <ChatHeader 
+        sessionId={sessionId}
+        onPaymentClick={() => setPaywallOpen(true)}
+        onVoiceCallClick={() => setLocation('/call')}
+      />
+      
       <div className="chat-panel">
-        {/* Header with Analysis Button */}
-        <div className="relative z-10">
-          <ChatHeader sessionId={sessionId} />
-          {/* Analyze Button in header area */}
-          <div className="px-4 py-2 bg-purple-50 border-b border-purple-100">
-            <Button
-              onClick={() => setShowAnalysis(true)}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
-              size="sm"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Analyze My Type
-            </Button>
-          </div>
+        {/* Analyze Button */}
+        <div className="px-4 py-2 bg-purple-50 border-b border-purple-100">
+          <Button
+            onClick={() => setShowAnalysis(true)}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
+            size="sm"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Analyze My Type
+          </Button>
         </div>
 
         {/* Messages with Enhanced UI */}
@@ -249,9 +251,6 @@ const ChatPage = () => {
             disabled={mutation.isPending || isTyping || (error && error.includes('PAYWALL'))}
           />
         </div>
-
-        {/* Voice Call Button */}
-        <VoiceCallButton disabled={!!error && error.includes('PAYWALL')} />
       </div>
 
       {/* Paywall Sheet */}
