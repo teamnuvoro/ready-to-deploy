@@ -1,12 +1,23 @@
 import { type Message } from "@shared/schema";
 import { format } from "date-fns";
+import { useState } from "react";
 
 interface ChatMessageProps {
   message: Message;
+  onReaction?: (messageId: string, reaction: string) => void;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, onReaction }: ChatMessageProps) {
   const isAI = message.role === "ai";
+  const [reaction, setReaction] = useState<string | null>(null);
+
+  const handleReactionClick = (emoji: string) => {
+    const newReaction = reaction === emoji ? null : emoji;
+    setReaction(newReaction);
+    if (onReaction) {
+      onReaction(message.id, newReaction || "");
+    }
+  };
   
   return (
     <div 
@@ -33,6 +44,43 @@ export function ChatMessage({ message }: ChatMessageProps) {
             {message.createdAt ? format(new Date(message.createdAt), 'h:mm a') : ''}
           </p>
         </div>
+
+        {/* Reaction on message */}
+        {reaction && (
+          <div className="absolute -bottom-2 -right-2 bg-white rounded-full px-2 py-1 shadow-md text-sm border border-gray-200">
+            {reaction}
+          </div>
+        )}
+
+        {/* Quick reaction buttons for AI messages */}
+        {isAI && !reaction && (
+          <div className="absolute -bottom-8 left-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white rounded-full shadow-lg px-2 py-1 border border-gray-200 z-10">
+            <button
+              onClick={() => handleReactionClick("❤️")}
+              className="hover:scale-125 transition-transform p-1"
+              title="Love"
+              aria-label="React with heart"
+            >
+              ❤️
+            </button>
+            <button
+              onClick={() => handleReactionClick("👍")}
+              className="hover:scale-125 transition-transform p-1"
+              title="Like"
+              aria-label="React with thumbs up"
+            >
+              👍
+            </button>
+            <button
+              onClick={() => handleReactionClick("🙏")}
+              className="hover:scale-125 transition-transform p-1"
+              title="Thankful"
+              aria-label="React with folded hands"
+            >
+              🙏
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
