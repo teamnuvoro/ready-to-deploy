@@ -47,17 +47,21 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
   return <Component />;
 }
 
+// Root route component that can use hooks
+function RootRoute() {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return <LandingPage />;
+  }
+  
+  return <Redirect to="/chat" />;
+}
+
 function Router() {
-  const { user } = useAuth(); // Added to get user for the root route logic
   return (
     <Switch>
-      <Route path="/">
-        {() => {
-          if (!user) return <LandingPage />;
-          // Onboarding bypassed as requested
-          return <Redirect to="/chat" />;
-        }}
-      </Route>
+      <Route path="/" component={RootRoute} />
       <Route path="/signup" component={SignupPage} />
       <Route path="/login" component={LoginPage} />
 
