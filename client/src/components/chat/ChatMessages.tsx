@@ -61,23 +61,33 @@ export function ChatMessages({
     return hasNew;
   };
 
-  // Check if user is scrolling manually
+  // Check if user is scrolling manually - completely disable auto-scroll when scrolling
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    let scrollTimer: NodeJS.Timeout;
     const handleScroll = () => {
       isUserScrollingRef.current = true;
-      clearTimeout(scrollTimeoutRef.current || undefined);
-      scrollTimeoutRef.current = setTimeout(() => {
-        isUserScrollingRef.current = false;
-      }, 150);
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        // Check if user scrolled back to bottom
+        const scrollHeight = container.scrollHeight;
+        const scrollTop = container.scrollTop;
+        const clientHeight = container.clientHeight;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        
+        // Only re-enable if user is back at bottom
+        if (distanceFromBottom < 100) {
+          isUserScrollingRef.current = false;
+        }
+      }, 300); // Wait 300ms after scroll stops
     };
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       container.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      clearTimeout(scrollTimer);
     };
   }, []);
 
@@ -85,21 +95,23 @@ export function ChatMessages({
   // AUTO-SCROLL TO BOTTOM (FIXED - No Infinite Loop)
   // ============================================
   useEffect(() => {
-    // Clear any pending scroll
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-
-    // Don't scroll if user is manually scrolling
+    // CRITICAL: Block all scrolling if user manually scrolled
     if (isUserScrollingRef.current) {
       return;
     }
 
+    // Clear any pending scroll
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+
     const newMessageAdded = hasNewMessage();
     const messageCountChanged = messages.length !== previousMessagesLengthRef.current;
+    const isFirstLoad = previousMessagesLengthRef.current === 0 && messages.length > 0;
 
-    // Only proceed if actual new message OR first load OR typing/streaming
-    if (!newMessageAdded && !messageCountChanged && !isTyping && !streamingMessage && messages.length > 0) {
+    // BLOCK: Don't scroll on background refetches (same message count, no new IDs)
+    if (!newMessageAdded && !messageCountChanged && !isTyping && !streamingMessage && !isFirstLoad) {
       previousMessagesLengthRef.current = messages.length;
       return;
     }
@@ -117,32 +129,39 @@ export function ChatMessages({
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const isAtBottom = distanceFromBottom < 150; // 150px tolerance
 
-    // Only scroll if:
-    // 1. New message added AND user is at bottom
-    // 2. OR first load (messages.length was 0)
-    // 3. OR typing/streaming started
+    // STRICT: Only scroll if:
+    // 1. New message with different ID AND user at bottom
+    // 2. OR first load
+    // 3. OR typing/streaming AND at bottom
     const shouldScroll = (newMessageAdded && isAtBottom) || 
-                         (previousMessagesLengthRef.current === 0 && messages.length > 0) ||
-                         isTyping || 
-                         streamingMessage;
+                         isFirstLoad ||
+                         ((isTyping || streamingMessage) && isAtBottom);
 
     if (shouldScroll) {
       scrollTimeoutRef.current = setTimeout(() => {
         scrollToBottom();
-      }, 100);
+      }, 150);
     }
 
     previousMessagesLengthRef.current = messages.length;
   }, [messages.length, isTyping, streamingMessage]);
 
   const scrollToBottom = () => {
-    const container = messagesContainerRef.current;
-    if (!container || isUserScrollingRef.current) return;
+    // CRITICAL: Double-check before scrolling
+    if (isUserScrollingRef.current) {
+      return;
+    }
 
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Use immediate scroll instead of smooth to prevent animation loops
     requestAnimationFrame(() => {
+      if (isUserScrollingRef.current) return; // Check again
+      
       if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ 
-          behavior: 'smooth',
+          behavior: 'auto', // IMMEDIATE - no animation that could trigger loops
           block: 'end',
           inline: 'nearest'
         });
