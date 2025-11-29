@@ -1,358 +1,333 @@
-import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { type Message, type Session } from "@shared/schema";
-import { ChatHeader } from "@/components/chat/ChatHeader";
-import { ChatMessages } from "@/components/chat/ChatMessages";
-import { ChatInput } from "@/components/chat/ChatInput";
-import { VoiceCallButton } from "@/components/chat/VoiceCallButton";
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'wouter';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PaywallSheet } from "@/components/paywall/PaywallSheet";
-import { AnalysisScreen } from "@/components/analysis/AnalysisScreen";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { CreditCard, ShieldCheck, Sparkles } from "lucide-react";
 
-import { analytics } from "@/lib/analytics";
-
-export default function ChatPage() {
+const ChatPage = () => {
+  const [, setLocation] = useLocation();
+  const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [error, setError] = useState('');
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const userId = localStorage.getItem('userId') || 'dev-user-001';
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user } = useAuth();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const [voiceModeEnabled, setVoiceModeEnabled] = useState(false);
 
-  const { data: session, isLoading: isSessionLoading } = useQuery<Session>({
-    queryKey: ["session"],
+  // Get or create session
+  const { data: session, isLoading: isSessionLoading } = useQuery({
+    queryKey: ['session'],
     queryFn: async () => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      
-      if (!supabaseUrl || !supabaseKey) {
-        // Fallback to Express API if Supabase not configured
-        const res = await fetch("/api/session", { method: "POST" });
-        if (!res.ok) throw new Error("Failed to get session");
-        return res.json();
-      }
-      
-      const res = await fetch(`${supabaseUrl}/functions/v1/get-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseKey}`,
-        },
-        body: JSON.stringify({ userId: user?.id || "dev-user-001" }),
-      });
-      
-      if (!res.ok) throw new Error("Failed to get session");
-      return res.json();
-    }
-  });
-
-  const { data: messages = [], isLoading: isMessagesLoading } = useQuery<Message[]>({
-    queryKey: ["messages", session?.id],
-    enabled: !!session?.id,
-    queryFn: async () => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      
-      if (!supabaseUrl || !supabaseKey || !session?.id) {
-        // Fallback to Express API if Supabase not configured
-        const res = await fetch(`/api/messages?sessionId=${session?.id}`);
-        if (!res.ok) return [];
-        return res.json();
-      }
-      
-      const res = await fetch(`${supabaseUrl}/functions/v1/get-messages?sessionId=${session.id}`, {
-        headers: {
-          "Authorization": `Bearer ${supabaseKey}`,
-        },
-      });
-      
-      if (!res.ok) return [];
+      const res = await fetch("/api/session", { method: "POST" });
+      if (!res.ok) throw new Error('Failed to get session');
       return res.json();
     },
   });
 
-  interface UserUsage {
-    messageCount: number;
-    callDuration: number;
-    premiumUser: boolean;
-    messageLimitReached: boolean;
-    callLimitReached: boolean;
-  }
+  const sessionId = session?.id || 'dev-session-001';
 
-  const { data: userUsage, isLoading: isUsageLoading } = useQuery<UserUsage>({
-    queryKey: ["/api/user/usage"],
+  // ============================================
+  // FETCH MESSAGES - AUTO-REFRESH EVERY 500ms
+  // ============================================
+  const { data: messagesData, isLoading: isMessagesLoading } = useQuery({
+    queryKey: ['messages', sessionId],
+    queryFn: async () => {
+      if (!sessionId) return { messages: [] };
+      
+      // Try both endpoint formats
+      let res = await fetch(`/api/messages/${sessionId}`).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch(`/api/messages?sessionId=${sessionId}`);
+      }
+      
+      if (!res || !res.ok) {
+        return { messages: [] };
+      }
+
+      const data = await res.json();
+      return Array.isArray(data) ? { messages: data } : data;
+    },
+    refetchInterval: 500, // 🔑 CRITICAL: Refetch every 500ms
+    refetchIntervalInBackground: true, // Keep refreshing even in background
+    staleTime: 0, // Always consider data stale
+    gcTime: 300000, // Keep in cache for 5 mins
+    enabled: !!sessionId && !isSessionLoading,
+    retry: 1,
+    retryDelay: 100,
   });
 
+  // Get messages array
+  const messages = messagesData?.messages || [];
 
+  // ============================================
+  // AUTO-SCROLL TO BOTTOM
+  // ============================================
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]); // Scroll when messages change
 
-  const isLoading = isSessionLoading || isMessagesLoading || isUsageLoading;
-  // Bypass limit in development mode
-  const isDev = import.meta.env.MODE === 'development';
-  const isLimitReached = !isDev && (userUsage?.messageLimitReached || userUsage?.callLimitReached) && !userUsage?.premiumUser;
-
-  const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
-      if (!session) {
-        throw new Error("No active session");
-      }
-
-      setIsTyping(true);
-      setStreamingMessage("");
-
-      abortControllerRef.current = new AbortController();
-
-      try {
-        // Use Express API endpoint (simplified MVP)
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ 
-            message: content,
-            userId: user?.id || "dev-user-001",
-            sessionId: session.id 
-          }),
-          signal: abortControllerRef.current.signal,
-        });
-
-        // Handle paywall error
-        if (response.status === 402) {
-          const data = await response.json();
-          throw new Error("PAYWALL_HIT");
-        }
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to send message");
-        }
-
-        // Get JSON response (non-streaming)
-        const data = await response.json();
-        return data;
-
-        // Return the response data
-        return data;
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.log("Stream aborted by user");
-        } else {
-          throw error;
-        }
-      } finally {
-        setIsTyping(false);
-        setStreamingMessage("");
-      }
-    },
-    onSuccess: (data) => {
-      setIsTyping(false);
-      setStreamingMessage("");
-      
-      // Invalidate queries to refresh messages and usage
-      if (session?.id) {
-        queryClient.invalidateQueries({ queryKey: ["messages", session.id] });
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-    },
-    onError: (error: any) => {
-      setIsTyping(false);
-      setStreamingMessage("");
-      
-      // Handle paywall error
-      if (error.message === "PAYWALL_HIT") {
-        setPaywallOpen(true);
-        toast({
-          title: "Message Limit Reached",
-          description: "You've reached your free message limit! Upgrade to continue chatting.",
-          variant: "destructive",
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to send message. Please try again.",
-          variant: "destructive",
-        });
-      }
-      console.error("Chat error:", error);
-    },
-  });
-
-  const handleSendMessage = (content: string) => {
-    analytics.track("message_sent", {
-      length: content.length,
-      voiceMode: voiceModeEnabled
-    });
-    sendMessageMutation.mutate(content);
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 0);
   };
 
-  const displayMessages = [...messages];
+  // ============================================
+  // SEND MESSAGE MUTATION - OPTIMISTIC UPDATE
+  // ============================================
+  const mutation = useMutation({
+    mutationFn: async (msg: string) => {
+      setError('');
+      
+      if (!msg.trim() || !userId || !sessionId) {
+        throw new Error('Invalid message or user data');
+      }
 
-  if (streamingMessage && session) {
-    displayMessages.push({
-      id: "streaming",
-      sessionId: session.id,
-      userId: session.userId,
-      role: "ai" as const,
-      tag: "general" as const,
-      text: streamingMessage,
-      createdAt: new Date(),
-    });
-  }
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+          headers: {
+          'Content-Type': 'application/json',
+        },
+                        body: JSON.stringify({
+          message: msg,
+          userId,
+          sessionId,
+                        }),
+                      });
 
-  useEffect(() => {
-    if (paywallOpen) {
-      analytics.track("paywall_shown", {
-        source: isLimitReached ? "limit_reached" : "user_click",
-        messageCount: userUsage?.messageCount
+      if (response.status === 402) {
+        // Paywall hit
+        setError('You\'ve reached your free message limit! Upgrade to continue.');
+        setPaywallOpen(true);
+        throw new Error('PAYWALL_HIT');
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to send message');
+      }
+
+      return response.json();
+    },
+
+    // 🔑 OPTIMISTIC UPDATE: Add message immediately
+    onMutate: async (newMessage) => {
+      // Cancel ongoing queries
+      await queryClient.cancelQueries({ queryKey: ['messages', sessionId] });
+
+      // Get previous data
+      const previousMessages = queryClient.getQueryData(['messages', sessionId]) as any;
+
+      // Update cache with user message immediately
+      queryClient.setQueryData(['messages', sessionId], (old: any) => {
+        const timestamp = new Date().toISOString();
+        return {
+          messages: [
+            ...(old?.messages || []),
+            {
+              id: `temp-${Date.now()}`,
+              sessionId: sessionId,
+              userId: userId,
+              role: 'user',
+              text: newMessage,
+              createdAt: timestamp,
+            },
+          ],
+        };
       });
-    }
-  }, [paywallOpen, isLimitReached, userUsage]);
 
-  // Paywall & Limit Logic
-  useEffect(() => {
-    if (userUsage) {
-      // Soft warning at 18 messages
-      if (userUsage.messageCount === 18 && !userUsage.premiumUser) {
+      setIsTyping(true);
+
+      return { previousMessages }; // Return for rollback if needed
+    },
+
+    // On success: Force refetch to get AI response
+    onSuccess: (data) => {
+      setIsTyping(false);
+      setMessage(''); // Clear input
+      
+      // Immediately refetch messages to get AI response
+      queryClient.invalidateQueries({ queryKey: ['messages', sessionId] });
+      
+      // Also manually refetch to ensure we get latest
+      queryClient.refetchQueries({ queryKey: ['messages', sessionId] });
+    },
+
+    // On error: Rollback optimistic update
+    onError: (error: any, _variables, context: any) => {
+      setIsTyping(false);
+      
+      if (error.message === 'PAYWALL_HIT') {
+        setError('You\'ve reached your free message limit! Upgrade to continue.');
+        // Don't show generic error for paywall
+      } else {
+        setError(error.message || 'Failed to send message');
         toast({
-          title: "Almost there...",
-          description: "Bas thoda sa reh gaya… free limit khatam hone wali hai.",
-          duration: 5000,
+          title: "Error",
+          description: error.message || "Failed to send message",
+          variant: "destructive",
         });
       }
 
-      // Hard limit trigger
-      if ((userUsage.messageLimitReached || userUsage.callLimitReached) && !userUsage.premiumUser) {
-        setPaywallOpen(true);
+      // Rollback to previous state
+      if (context?.previousMessages) {
+        queryClient.setQueryData(['messages', sessionId], context.previousMessages);
       }
-    }
-  }, [userUsage, toast]);
+    },
+  });
 
+  // ============================================
+  // HANDLE FORM SUBMISSION
+  // ============================================
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
 
+    if (!message.trim()) return;
+    if (isTyping || mutation.isPending) return;
+    if (error && error.includes('PAYWALL')) return;
 
-  if (isLoading) {
+    mutation.mutate(message);
+  };
+
+  const isLoading = isSessionLoading || isMessagesLoading;
+
+  // ============================================
+  // RENDER
+  // ============================================
     return (
-      <div className="chat-shell">
-        <div className="chat-panel">
-          <ChatHeader />
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-muted-foreground">Loading...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="chat-shell">
-      <div className="chat-panel">
-        <div className="relative z-10">
-          <ChatHeader
-            sessionId={session?.id}
-            voiceModeEnabled={voiceModeEnabled}
-            onVoiceModeToggle={() => setVoiceModeEnabled(!voiceModeEnabled)}
-          />
-          {/* Hovering "Riya" Animation */}
-          <div className="absolute top-4 left-16 pointer-events-none">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-pink-500"></span>
-            </span>
-          </div>
-        </div>
-        <div className="flex-1 overflow-hidden flex flex-col relative">
-          {showAnalysis ? (
-            <AnalysisScreen
-              aiName="Riya"
-              userName={user?.name || "User"}
-              onClose={() => setShowAnalysis(false)}
-            />
-          ) : (
-            <ChatMessages
-              messages={displayMessages}
-              isLoading={isLoading}
-              streamingMessage={streamingMessage}
-              isTyping={isTyping && !streamingMessage}
-              quickReplies={[]}
-              onQuickReply={handleSendMessage}
-            />
-          )}
-        </div>
-
-        {/* Analyze Button */}
-        {!showAnalysis && (
-          <div className="px-4 py-2 bg-purple-50 border-t border-purple-100">
-            <Button
-              onClick={() => setShowAnalysis(true)}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              Analyze My Type
-            </Button>
-          </div>
-        )}
-
-        {/* Paywall Banner when locked */}
-        {isLimitReached && (
-          <div className="bg-destructive/10 border-t border-destructive/20 p-3 text-center animate-in slide-in-from-bottom-5">
-            <p className="text-sm font-medium text-destructive mb-2">
-              To continue chatting, choose a plan.
+    <div className="flex flex-col h-screen bg-gradient-to-b from-purple-50 to-pink-50">
+      {/* ============ HEADER ============ */}
+      <div className="bg-white border-b p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full animate-pulse" />
+          <div>
+            <h1 className="font-bold text-gray-800">Riya</h1>
+            <p className="text-xs text-gray-500">
+              {isLoading ? 'Loading...' : 'Always here for you 💕'}
             </p>
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => setPaywallOpen(true)}
-              className="w-full max-w-xs"
-            >
-              Unlock Chat
-            </Button>
           </div>
-        )}
-
-        {/* Sandbox Payment Bar (Only if NOT limit reached to avoid clutter) */}
-        {!isLimitReached && (
-          <div className="payment-sandbox-bar">
-            <div>
-              <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="cashfree-pulse" />
-                Payments
-              </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-accent" />
-                Secured by Cashfree (Test Mode)
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPaywallOpen(true)}
-              className="flex items-center gap-2 shrink-0"
-            >
-              <CreditCard className="h-4 w-4" />
-              Open Payment Sheet
-            </Button>
-          </div>
-        )}
-
-        <div className="chat-input-shell">
-          <ChatInput
-            onSendMessage={handleSendMessage}
-            disabled={sendMessageMutation.isPending || isLimitReached}
-          />
         </div>
-        <VoiceCallButton disabled={isLimitReached} />
       </div>
+
+      {/* ============ MESSAGES CONTAINER ============ */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-purple-50 to-pink-50">
+        {isLoading && messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-2" />
+              <p className="text-gray-400">Loading chat...</p>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-gray-400 mb-2">No messages yet</p>
+              <p className="text-sm text-gray-300">Say hello to Riya! 👋</p>
+        </div>
+        </div>
+        ) : (
+          messages.map((msg: any) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+            >
+              <div
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm transition-all ${
+                  msg.role === 'user'
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-br-none'
+                    : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                }`}
+              >
+                <p className="text-sm leading-relaxed">{msg.text}</p>
+                <p
+                  className={`text-xs mt-1 ${
+                    msg.role === 'user' ? 'text-purple-100' : 'text-gray-400'
+                  }`}
+                >
+                  {msg.createdAt 
+                    ? new Date(msg.createdAt).toLocaleTimeString()
+                    : new Date().toLocaleTimeString()}
+                </p>
+              </div>
+          </div>
+          ))
+        )}
+
+        {/* TYPING INDICATOR */}
+        {isTyping && (
+          <div className="flex justify-start animate-fadeIn">
+            <div className="bg-white border border-gray-200 px-4 py-2 rounded-lg rounded-bl-none shadow-sm">
+              <div className="flex space-x-2">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* ============ ERROR MESSAGE ============ */}
+      {error && (
+        <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm animate-fadeIn">
+          {error}
+        </div>
+      )}
+
+      {/* ============ INPUT FORM ============ */}
+      <form onSubmit={handleSendMessage} className="p-4 border-t bg-white shadow-lg">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage(e as any);
+              }
+            }}
+            placeholder="Tell Riya anything..."
+            disabled={
+              mutation.isPending ||
+              isTyping ||
+              (error && error.includes('PAYWALL'))
+            }
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={
+              mutation.isPending ||
+              isTyping ||
+              !message.trim() ||
+              (error && error.includes('PAYWALL'))
+            }
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-medium"
+          >
+            {mutation.isPending || isTyping ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Sending...
+              </span>
+            ) : (
+              'Send'
+            )}
+          </button>
+        </div>
+      </form>
+
       <PaywallSheet
         open={paywallOpen}
         onOpenChange={setPaywallOpen}
-        messageCount={userUsage?.messageCount || 0}
+        messageCount={0}
       />
     </div>
   );
-}
+};
+
+export default ChatPage;
