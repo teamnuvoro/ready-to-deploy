@@ -44,16 +44,71 @@ export function ChatMessages({
 }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showTip, setShowTip] = useState(true);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const previousMessagesLengthRef = useRef(messages.length);
 
+  // ============================================
+  // AUTO-SCROLL TO BOTTOM (FIXED - No Infinite Loop)
+  // ============================================
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, streamingMessage]);
+    // Only scroll if new message was added (not on every refetch)
+    const newMessageAdded = messages.length > previousMessagesLengthRef.current;
+    
+    if (!newMessageAdded && !isTyping && !streamingMessage) {
+      previousMessagesLengthRef.current = messages.length;
+      return;
+    }
+
+    // Check if user is at bottom of chat
+    const container = messagesContainerRef.current;
+    if (!container) {
+      previousMessagesLengthRef.current = messages.length;
+      return;
+    }
+
+    const scrollHeight = container.scrollHeight;
+    const scrollTop = container.scrollTop;
+    const clientHeight = container.clientHeight;
+    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 100; // 100px tolerance
+
+    // Only scroll if at bottom OR new message was just added OR typing/streaming
+    if (isAtBottom || newMessageAdded || isTyping || streamingMessage) {
+      scrollToBottom();
+    }
+
+    previousMessagesLengthRef.current = messages.length;
+  }, [messages.length, isTyping, streamingMessage]); // Only trigger when length changes, not entire array
+
+  const scrollToBottom = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    setTimeout(() => {
+      const lastMessage = container.querySelector('[data-message]:last-child');
+      if (lastMessage) {
+        lastMessage.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      } else if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'nearest'
+        });
+      }
+    }, 50);
+  };
 
   const showQuickRepliesCondition = messages.length <= 3 && !isTyping && !streamingMessage;
   const displayQuickReplies = messages.length === 1 ? quickReplies : conversationStarters.slice(0, 2);
 
   return (
-    <div className="chat-messages flex-1 overflow-y-auto relative bg-gradient-to-b from-purple-50/30 to-pink-50/30" data-testid="chat-messages-container">
+    <div 
+      ref={messagesContainerRef}
+      className="chat-messages flex-1 overflow-y-auto relative bg-gradient-to-b from-purple-50/30 to-pink-50/30" 
+      data-testid="chat-messages-container"
+      data-messages-container
+    >
       {/* WhatsApp-style background pattern */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none overflow-hidden">
         <div className="absolute inset-0" style={{
@@ -90,14 +145,15 @@ export function ChatMessages({
             </div>
           )}
           {messages.map((message) => (
-            <ChatMessage 
-              key={message.id} 
-              message={message}
-              onReaction={(messageId, reaction) => {
-                // Handle reaction - could save to backend in future
-                console.log(`Reaction ${reaction} on message ${messageId}`);
-              }}
-            />
+            <div key={message.id} data-message>
+              <ChatMessage 
+                message={message}
+                onReaction={(messageId, reaction) => {
+                  // Handle reaction - could save to backend in future
+                  console.log(`Reaction ${reaction} on message ${messageId}`);
+                }}
+              />
+            </div>
           ))}
 
           {showQuickRepliesCondition && displayQuickReplies.length > 0 && (
