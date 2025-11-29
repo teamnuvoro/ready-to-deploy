@@ -46,15 +46,60 @@ export function ChatMessages({
   const [showTip, setShowTip] = useState(true);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const previousMessagesLengthRef = useRef(messages.length);
+  const lastMessageIdRef = useRef<string | null>(messages.length > 0 ? messages[messages.length - 1]?.id : null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUserScrollingRef = useRef(false);
+
+  // Track actual new messages by comparing IDs, not just length
+  const hasNewMessage = () => {
+    if (messages.length === 0) return false;
+    const lastMessageId = messages[messages.length - 1]?.id;
+    const hasNew = lastMessageId !== lastMessageIdRef.current;
+    if (hasNew) {
+      lastMessageIdRef.current = lastMessageId;
+    }
+    return hasNew;
+  };
+
+  // Check if user is scrolling manually
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      isUserScrollingRef.current = true;
+      clearTimeout(scrollTimeoutRef.current || undefined);
+      scrollTimeoutRef.current = setTimeout(() => {
+        isUserScrollingRef.current = false;
+      }, 150);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
+  }, []);
 
   // ============================================
   // AUTO-SCROLL TO BOTTOM (FIXED - No Infinite Loop)
   // ============================================
   useEffect(() => {
-    // Only scroll if new message was added (not on every refetch)
-    const newMessageAdded = messages.length > previousMessagesLengthRef.current;
-    
-    if (!newMessageAdded && !isTyping && !streamingMessage) {
+    // Clear any pending scroll
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Don't scroll if user is manually scrolling
+    if (isUserScrollingRef.current) {
+      return;
+    }
+
+    const newMessageAdded = hasNewMessage();
+    const messageCountChanged = messages.length !== previousMessagesLengthRef.current;
+
+    // Only proceed if actual new message OR first load OR typing/streaming
+    if (!newMessageAdded && !messageCountChanged && !isTyping && !streamingMessage && messages.length > 0) {
       previousMessagesLengthRef.current = messages.length;
       return;
     }
@@ -69,34 +114,40 @@ export function ChatMessages({
     const scrollHeight = container.scrollHeight;
     const scrollTop = container.scrollTop;
     const clientHeight = container.clientHeight;
-    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 100; // 100px tolerance
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isAtBottom = distanceFromBottom < 150; // 150px tolerance
 
-    // Only scroll if at bottom OR new message was just added OR typing/streaming
-    if (isAtBottom || newMessageAdded || isTyping || streamingMessage) {
-      scrollToBottom();
+    // Only scroll if:
+    // 1. New message added AND user is at bottom
+    // 2. OR first load (messages.length was 0)
+    // 3. OR typing/streaming started
+    const shouldScroll = (newMessageAdded && isAtBottom) || 
+                         (previousMessagesLengthRef.current === 0 && messages.length > 0) ||
+                         isTyping || 
+                         streamingMessage;
+
+    if (shouldScroll) {
+      scrollTimeoutRef.current = setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     }
 
     previousMessagesLengthRef.current = messages.length;
-  }, [messages.length, isTyping, streamingMessage]); // Only trigger when length changes, not entire array
+  }, [messages.length, isTyping, streamingMessage]);
 
   const scrollToBottom = () => {
     const container = messagesContainerRef.current;
-    if (!container) return;
+    if (!container || isUserScrollingRef.current) return;
 
-    setTimeout(() => {
-      const lastMessage = container.querySelector('[data-message]:last-child');
-      if (lastMessage) {
-        lastMessage.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'nearest'
-        });
-      } else if (messagesEndRef.current) {
+    requestAnimationFrame(() => {
+      if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ 
           behavior: 'smooth',
-          block: 'nearest'
+          block: 'end',
+          inline: 'nearest'
         });
       }
-    }, 50);
+    });
   };
 
   const showQuickRepliesCondition = messages.length <= 3 && !isTyping && !streamingMessage;
