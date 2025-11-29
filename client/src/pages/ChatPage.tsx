@@ -56,9 +56,9 @@ const ChatPage = () => {
       const data = await res.json();
       return Array.isArray(data) ? { messages: data } : data;
     },
-    refetchInterval: 500, // 🔑 CRITICAL: Refetch every 500ms
-    refetchIntervalInBackground: true, // Keep refreshing even in background
-    staleTime: 0, // Always consider data stale
+    refetchInterval: 2000, // Refetch every 2 seconds (reduced from 500ms to prevent loops)
+    refetchIntervalInBackground: false, // Don't refetch in background tabs
+    staleTime: 1000, // Consider data fresh for 1 second
     gcTime: 300000, // Keep in cache for 5 mins
     enabled: !!sessionId && !isSessionLoading,
     retry: 1,

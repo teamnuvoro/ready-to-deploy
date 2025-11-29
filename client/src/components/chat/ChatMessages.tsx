@@ -155,17 +155,20 @@ export function ChatMessages({
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    // Use immediate scroll instead of smooth to prevent animation loops
+    // Set flag to prevent scroll event from triggering auto-scroll
+    isUserScrollingRef.current = true;
+
+    // Use immediate scroll with direct scrollTop manipulation instead of scrollIntoView
     requestAnimationFrame(() => {
-      if (isUserScrollingRef.current) return; // Check again
+      if (!container) return;
       
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ 
-          behavior: 'auto', // IMMEDIATE - no animation that could trigger loops
-          block: 'end',
-          inline: 'nearest'
-        });
-      }
+      // Direct scroll manipulation - doesn't trigger scroll events
+      container.scrollTop = container.scrollHeight;
+      
+      // Re-enable auto-scroll after a brief delay
+      setTimeout(() => {
+        isUserScrollingRef.current = false;
+      }, 100);
     });
   };
 
