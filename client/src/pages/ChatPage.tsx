@@ -2,7 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PaywallSheet } from "@/components/paywall/PaywallSheet";
+import { AnalysisScreen } from "@/components/analysis/AnalysisScreen";
+import { ChatHeader } from "@/components/chat/ChatHeader";
+import { ChatMessages } from "@/components/chat/ChatMessages";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { VoiceCallButton } from "@/components/chat/VoiceCallButton";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 
 const ChatPage = () => {
   const [, setLocation] = useLocation();
@@ -10,10 +18,12 @@ const ChatPage = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState('');
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const userId = localStorage.getItem('userId') || 'dev-user-001';
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Get or create session
   const { data: session, isLoading: isSessionLoading } = useQuery({
@@ -86,15 +96,15 @@ const ChatPage = () => {
 
       const response = await fetch('/api/chat', {
         method: 'POST',
-          headers: {
+        headers: {
           'Content-Type': 'application/json',
         },
-                        body: JSON.stringify({
+        body: JSON.stringify({
           message: msg,
           userId,
           sessionId,
-                        }),
-                      });
+        }),
+      });
 
       if (response.status === 402) {
         // Paywall hit
@@ -180,147 +190,84 @@ const ChatPage = () => {
   // ============================================
   // HANDLE FORM SUBMISSION
   // ============================================
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!message.trim()) return;
+  const handleSendMessage = (content: string) => {
+    if (!content.trim()) return;
     if (isTyping || mutation.isPending) return;
     if (error && error.includes('PAYWALL')) return;
 
-    mutation.mutate(message);
+    mutation.mutate(content);
   };
 
   const isLoading = isSessionLoading || isMessagesLoading;
 
+  // Show Analysis Screen
+  if (showAnalysis) {
+    return (
+      <div className="chat-shell">
+        <div className="chat-panel">
+          <AnalysisScreen
+            aiName="Riya"
+            userName={user?.name || "User"}
+            onClose={() => setShowAnalysis(false)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // ============================================
   // RENDER
   // ============================================
-    return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-purple-50 to-pink-50">
-      {/* ============ HEADER ============ */}
-      <div className="bg-white border-b p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full animate-pulse" />
-          <div>
-            <h1 className="font-bold text-gray-800">Riya</h1>
-            <p className="text-xs text-gray-500">
-              {isLoading ? 'Loading...' : 'Always here for you 💕'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ============ MESSAGES CONTAINER ============ */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-purple-50 to-pink-50">
-        {isLoading && messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto mb-2" />
-              <p className="text-gray-400">Loading chat...</p>
-            </div>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-gray-400 mb-2">No messages yet</p>
-              <p className="text-sm text-gray-300">Say hello to Riya! 👋</p>
-        </div>
-        </div>
-        ) : (
-          messages.map((msg: any) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+  return (
+    <div className="chat-shell">
+      <div className="chat-panel">
+        {/* Header with Analysis Button */}
+        <div className="relative z-10">
+          <ChatHeader sessionId={sessionId} />
+          {/* Analyze Button in header area */}
+          <div className="px-4 py-2 bg-purple-50 border-b border-purple-100">
+            <Button
+              onClick={() => setShowAnalysis(true)}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-full"
+              size="sm"
             >
-              <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm transition-all ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-br-none'
-                    : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
-                }`}
-              >
-                <p className="text-sm leading-relaxed">{msg.text}</p>
-                <p
-                  className={`text-xs mt-1 ${
-                    msg.role === 'user' ? 'text-purple-100' : 'text-gray-400'
-                  }`}
-                >
-                  {msg.createdAt 
-                    ? new Date(msg.createdAt).toLocaleTimeString()
-                    : new Date().toLocaleTimeString()}
-                </p>
-              </div>
+              <Sparkles className="w-4 h-4 mr-2" />
+              Analyze My Type
+            </Button>
           </div>
-          ))
-        )}
+        </div>
 
-        {/* TYPING INDICATOR */}
-        {isTyping && (
-          <div className="flex justify-start animate-fadeIn">
-            <div className="bg-white border border-gray-200 px-4 py-2 rounded-lg rounded-bl-none shadow-sm">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-              </div>
-            </div>
+        {/* Messages with Enhanced UI */}
+        <div className="flex-1 overflow-hidden flex flex-col relative">
+          <ChatMessages
+            messages={messages}
+            isLoading={isLoading}
+            isTyping={isTyping}
+            onQuickReply={handleSendMessage}
+          />
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm animate-fadeIn">
+            {error}
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        {/* Input Area */}
+        <div className="chat-input-shell">
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            disabled={mutation.isPending || isTyping || (error && error.includes('PAYWALL'))}
+          />
+        </div>
+
+        {/* Voice Call Button */}
+        <VoiceCallButton disabled={!!error && error.includes('PAYWALL')} />
       </div>
 
-      {/* ============ ERROR MESSAGE ============ */}
-      {error && (
-        <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm animate-fadeIn">
-          {error}
-        </div>
-      )}
-
-      {/* ============ INPUT FORM ============ */}
-      <form onSubmit={handleSendMessage} className="p-4 border-t bg-white shadow-lg">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage(e as any);
-              }
-            }}
-            placeholder="Tell Riya anything..."
-            disabled={
-              mutation.isPending ||
-              isTyping ||
-              (error && error.includes('PAYWALL'))
-            }
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
-            autoFocus
-          />
-          <button
-            type="submit"
-            disabled={
-              mutation.isPending ||
-              isTyping ||
-              !message.trim() ||
-              (error && error.includes('PAYWALL'))
-            }
-            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-medium"
-          >
-            {mutation.isPending || isTyping ? (
-              <span className="flex items-center gap-2">
-                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Sending...
-              </span>
-            ) : (
-              'Send'
-            )}
-          </button>
-        </div>
-      </form>
-
+      {/* Paywall Sheet */}
       <PaywallSheet
         open={paywallOpen}
         onOpenChange={setPaywallOpen}
