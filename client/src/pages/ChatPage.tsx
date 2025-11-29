@@ -19,7 +19,6 @@ const ChatPage = () => {
   const [error, setError] = useState('');
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const userId = localStorage.getItem('userId') || 'dev-user-001';
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -70,18 +69,7 @@ const ChatPage = () => {
   // Get messages array
   const messages = messagesData?.messages || [];
 
-  // ============================================
-  // AUTO-SCROLL TO BOTTOM
-  // ============================================
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]); // Scroll when messages change
-
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 0);
-  };
+  // Note: Auto-scroll is handled inside ChatMessages component
 
   // ============================================
   // SEND MESSAGE MUTATION - OPTIMISTIC UPDATE
@@ -245,7 +233,6 @@ const ChatPage = () => {
             isTyping={isTyping}
             onQuickReply={handleSendMessage}
           />
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Error Message */}
