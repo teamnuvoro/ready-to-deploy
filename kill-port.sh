@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Find and kill process on port 5001
+# Find and kill process on port 5001 (primary)
 echo "🔍 Finding process on port 5001..."
 lsof -ti:5001 | xargs kill -9 2>/dev/null
 
-# Find and kill process on port 5000
+# Find and kill process on port 5000 (legacy)
 echo "🔍 Finding process on port 5000..."
 lsof -ti:5000 | xargs kill -9 2>/dev/null
 
