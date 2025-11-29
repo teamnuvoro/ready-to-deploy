@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
-  // Initialize analytics on mount
+  // Initialize analytics on mount - only once
   useEffect(() => {
     analytics.initialize();
   }, []);
@@ -28,9 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/auth/session"],
     queryFn: async () => {
       if (authDisabled) {
-        // In dev mode, return a mock user
+        // In dev mode, return a mock user immediately
         return {
-          id: "dev",
+          id: "dev-user-001",
           name: "Dev User",
           email: "dev@example.com",
           premiumUser: true,
@@ -39,15 +39,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } as User;
       }
       
-      const res = await fetch("/api/auth/session");
-      if (!res.ok) {
-        if (res.status === 401) return null;
+      try {
+        const res = await fetch("/api/auth/session");
+        if (!res.ok) {
+          if (res.status === 401) return null;
+          return null;
+        }
+        const data = await res.json();
+        return data.user || null;
+      } catch (error) {
+        console.warn("[Auth] Failed to fetch session:", error);
         return null;
       }
-      const data = await res.json();
-      return data.user || null;
     },
     staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Track user when authenticated
@@ -82,19 +89,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   };
 
-  // Handle auth disabled mode
-  const effectiveUser = authDisabled && !user ? { id: "dev", name: "Dev User" } as User : user;
+  // Handle auth disabled mode - ensure we always have a user in dev mode
+  const effectiveUser = authDisabled && !user 
+    ? { 
+        id: "dev-user-001", 
+        name: "Dev User",
+        email: "dev@example.com",
+        premiumUser: true,
+        gender: "male",
+        age: 25
+      } as User 
+    : user;
+
+  const contextValue = {
+    user: effectiveUser || null,
+    login,
+    logout,
+    isAuthenticated: !!effectiveUser,
+    isLoading: authDisabled ? false : isLoading, // Don't show loading in dev mode
+  };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user: effectiveUser || null,
-        login,
-        logout,
-        isAuthenticated: !!effectiveUser,
-        isLoading,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

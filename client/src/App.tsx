@@ -49,7 +49,16 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
 
 // Root route component that can use hooks
 function RootRoute() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center text-muted-foreground">
+        Loading...
+      </div>
+    );
+  }
   
   if (!user) {
     return <LandingPage />;

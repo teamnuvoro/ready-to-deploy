@@ -1,18 +1,32 @@
-import * as amplitude from '@amplitude/analytics-browser';
-
-const AMPLITUDE_API_KEY = import.meta.env.VITE_AMPLITUDE_API_KEY || "cc9d84849d1d00b665e7fa4d72fd5fe2";
-
-// Check if we're on localhost
+// Check if we're on localhost FIRST, before importing Amplitude
 const isLocalhost = () => {
     if (typeof window === 'undefined') return false;
     const hostname = window.location.hostname;
     return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
 };
 
+// Lazy load Amplitude only when not on localhost
+let amplitude: any = null;
+let amplitudeLoaded = false;
+
+const loadAmplitude = async () => {
+    if (isLocalhost() || amplitudeLoaded) return null;
+    try {
+        amplitude = await import('@amplitude/analytics-browser');
+        amplitudeLoaded = true;
+        return amplitude;
+    } catch (error) {
+        console.warn("[Analytics] Failed to load Amplitude:", error);
+        return null;
+    }
+};
+
+const AMPLITUDE_API_KEY = import.meta.env.VITE_AMPLITUDE_API_KEY || "cc9d84849d1d00b665e7fa4d72fd5fe2";
+
 let isInitialized = false;
 
 export const analytics = {
-    initialize: () => {
+    initialize: async () => {
         // STOP THE SPAM: Only run if we are NOT in localhost
         if (isLocalhost()) {
             console.log("🚫 Analytics disabled on Localhost to prevent AdBlock errors");
@@ -25,15 +39,19 @@ export const analytics = {
         }
 
         try {
-            amplitude.init(AMPLITUDE_API_KEY, {
+            const amp = await loadAmplitude();
+            if (!amp) return;
+            
+            amp.init(AMPLITUDE_API_KEY, {
                 defaultTracking: {
-                    sessions: true,
-                    pageViews: true,
+                    sessions: false, // Disable auto session tracking
+                    pageViews: false, // Disable auto page views
                     formInteractions: false,
                     fileDownloads: false,
                 },
                 minIdLength: 1,
             });
+            amplitude = amp;
             isInitialized = true;
         } catch (error) {
             console.warn("[Analytics] Failed to initialize:", error);
@@ -46,15 +64,14 @@ export const analytics = {
             return;
         }
 
-        if (!isInitialized || !AMPLITUDE_API_KEY) {
-            console.log(`[Analytics Mock] Track: ${eventName}`, properties);
-            return;
+        if (!isInitialized || !amplitude || !AMPLITUDE_API_KEY) {
+            return; // Silently skip if not initialized
         }
 
         try {
             amplitude.track(eventName, properties);
         } catch (error) {
-            console.warn("[Analytics] Track failed:", error);
+            // Silently fail - don't spam console
         }
     },
 
@@ -64,9 +81,8 @@ export const analytics = {
             return;
         }
 
-        if (!isInitialized || !AMPLITUDE_API_KEY) {
-            console.log(`[Analytics Mock] Identify: ${userId}`, traits);
-            return;
+        if (!isInitialized || !amplitude || !AMPLITUDE_API_KEY) {
+            return; // Silently skip if not initialized
         }
 
         try {
@@ -79,20 +95,21 @@ export const analytics = {
                 amplitude.identify(identify);
             }
         } catch (error) {
-            console.warn("[Analytics] Identify failed:", error);
+            // Silently fail - don't spam console
         }
     },
 
     reset: () => {
         // Skip all analytics on localhost
-        if (isLocalhost() || !isInitialized || !AMPLITUDE_API_KEY) {
+        if (isLocalhost() || !isInitialized || !amplitude || !AMPLITUDE_API_KEY) {
             return;
         }
 
         try {
             amplitude.reset();
         } catch (error) {
-            console.warn("[Analytics] Reset failed:", error);
+            // Silently fail - don't spam console
         }
     }
 };
+
