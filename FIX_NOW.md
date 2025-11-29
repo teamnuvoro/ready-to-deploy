@@ -18,7 +18,7 @@ This will force-kill ALL node processes.
 
 Create or update `.env` file in project root:
 ```
-PORT=5000
+PORT=5001
 DISABLE_AUTH=true
 USE_IN_MEMORY_STORAGE=true
 SESSION_SECRET=dev_secret_123
@@ -32,8 +32,8 @@ npm run dev
 
 ## What Should Happen
 
-✅ Server starts on port 5000  
-✅ Preview loads at http://localhost:5000  
+✅ Server starts on port 5001  
+✅ Preview loads at http://localhost:5001  
 ✅ TypeScript errors won't affect runtime (those services aren't used)
 
 ## About the Cashfree Error

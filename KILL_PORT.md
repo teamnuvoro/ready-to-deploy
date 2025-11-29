@@ -19,4 +19,4 @@ killall -9 node
 npm run dev
 ```
 
-The server should now start on port 5000 and the preview will work.
+The server should now start on port 5001 and the preview will work.
