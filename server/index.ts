@@ -73,7 +73,7 @@ app.get("/api/auth/session", async (req, res) => {
     serveStatic(app);
   }
 
-  const port = parseInt(process.env.PORT || '3000', 10);
+  const port = parseInt(process.env.PORT || '5000', 10);
   
   server.listen({
     port,

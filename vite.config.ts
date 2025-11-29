@@ -4,8 +4,6 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { componentTagger } from "lovable-tagger";
 
-const devPort = Number(process.env.PORT || 3000);
-
 export default defineConfig({
   plugins: [
     react(),
@@ -37,7 +35,8 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: 8080,
+    port: 5000,
+    strictPort: true,
     fs: {
       strict: true,
       deny: [".env", ".env.*", "*.{crt,pem,key}"],
