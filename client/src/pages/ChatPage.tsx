@@ -1,25 +1,32 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type Message, type Session } from "@shared/schema";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { PaywallSheet } from "@/components/paywall/PaywallSheet";
-import { AnalysisScreen } from "@/components/analysis/AnalysisScreen";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Button } from "@/components/ui/button";
-import { CreditCard } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { analytics } from "@/lib/analytics";
+
+interface OptimisticMessage {
+  id: string;
+  content: string;
+  role: "user" | "assistant";
+  sessionId: string;
+  createdAt: Date;
+  isOptimistic?: boolean;
+  isStreaming?: boolean;
+}
 
 export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
   const [failedMessage, setFailedMessage] = useState<string>("");
   const { toast } = useToast();
   const { user } = useAuth();
@@ -44,7 +51,23 @@ export default function ChatPage() {
       if (!res.ok) return [];
       return res.json();
     },
+    refetchInterval: 1500,
+    staleTime: 0,
   });
+
+  useEffect(() => {
+    if (messages.length > 0 && optimisticMessages.length > 0) {
+      const serverMessageContents = new Set(
+        messages.map(m => m.content.trim().toLowerCase())
+      );
+      
+      setOptimisticMessages(prev => 
+        prev.filter(optMsg => 
+          !serverMessageContents.has(optMsg.content.trim().toLowerCase())
+        )
+      );
+    }
+  }, [messages]);
 
   interface UserUsage {
     messageCount: number;
@@ -70,7 +93,6 @@ export default function ChatPage() {
     staleTime: 30000,
   });
 
-  // Figma design: Hinglish quick replies
   const quickReplies = [
     "Mera current relationship confusing hai",
     "Kaise pata chalega koi mujhe pasand karta hai?",
@@ -80,13 +102,36 @@ export default function ChatPage() {
     "Kaise pata chalega main relationship ready hoon?"
   ];
 
-  // Only wait for session to load, not usage (which can load in background)
   const isLoading = isSessionLoading;
   const isDev = import.meta.env.MODE === 'development';
   const isLimitReached = !isDev && (userUsage?.messageLimitReached || userUsage?.callLimitReached) && !userUsage?.premiumUser;
 
+  const generateTempId = () => `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  const addOptimisticMessage = useCallback((content: string) => {
+    if (!session) return null;
+    
+    const optimisticMsg: OptimisticMessage = {
+      id: generateTempId(),
+      content,
+      role: "user",
+      sessionId: session.id,
+      createdAt: new Date(),
+      isOptimistic: true,
+    };
+    
+    setOptimisticMessages(prev => [...prev, optimisticMsg]);
+    setFailedMessage("");
+    
+    return optimisticMsg;
+  }, [session]);
+
+  const removeOptimisticMessage = useCallback((messageId: string) => {
+    setOptimisticMessages(prev => prev.filter(m => m.id !== messageId));
+  }, []);
+
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, optimisticId }: { content: string; optimisticId: string }) => {
       if (!session) {
         throw new Error("No active session");
       }
@@ -108,9 +153,10 @@ export default function ChatPage() {
 
         if (response.status === 402) {
           setIsTyping(false);
+          removeOptimisticMessage(optimisticId);
           setPaywallOpen(true);
           queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-          return;
+          return { success: false, reason: 'paywall' };
         }
 
         if (!response.ok) {
@@ -122,9 +168,10 @@ export default function ChatPage() {
           const data = await response.json();
           if (data.limitExceeded) {
             setIsTyping(false);
+            removeOptimisticMessage(optimisticId);
             setPaywallOpen(true);
             queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-            return;
+            return { success: false, reason: 'limit' };
           }
         }
 
@@ -165,32 +212,10 @@ export default function ChatPage() {
                   setIsTyping(false);
                   setStreamingMessage("");
                   if (session?.id) {
-                    queryClient.invalidateQueries({ queryKey: ["/api/messages", session.id] });
+                    queryClient.invalidateQueries({ queryKey: ["messages", session.id] });
                   }
                   queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
-
-                  if (voiceModeEnabled && accumulatedMessage) {
-                    try {
-                      const response = await fetch("/api/voice/speak", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          text: accumulatedMessage,
-                          provider: user?.voiceProvider || "elevenlabs",
-                          voiceId: user?.voiceId || "21m00Tcm4TlvDq8ikWAM",
-                          apiKey: user?.elevenLabsApiKey
-                        }),
-                      });
-                      if (response.ok) {
-                        const blob = await response.blob();
-                        const audio = new Audio(URL.createObjectURL(blob));
-                        audio.play();
-                      }
-                    } catch (err) {
-                      console.error("Failed to generate speech:", err);
-                    }
-                  }
-                  return;
+                  return { success: true };
                 }
 
                 if (data.content) {
@@ -205,12 +230,14 @@ export default function ChatPage() {
         }
 
         if (session) {
-          queryClient.invalidateQueries({ queryKey: ["/api/messages", session.id] });
+          queryClient.invalidateQueries({ queryKey: ["messages", session.id] });
         }
         queryClient.invalidateQueries({ queryKey: ["/api/user/usage"] });
+        return { success: true };
       } catch (error: any) {
         if (error.name === 'AbortError') {
           console.log("Stream aborted by user");
+          return { success: false, reason: 'aborted' };
         } else {
           throw error;
         }
@@ -222,15 +249,14 @@ export default function ChatPage() {
     onSuccess: () => {
       setFailedMessage("");
     },
-    onError: (error, content) => {
+    onError: (error, variables) => {
       setIsTyping(false);
       setStreamingMessage("");
-      if (typeof content === "string") {
-        setFailedMessage(content);
-      }
+      removeOptimisticMessage(variables.optimisticId);
+      setFailedMessage(variables.content);
       toast({
-        title: "Error",
-        description: error.message || "Failed to send message. Please try again.",
+        title: "Failed to send message",
+        description: "Please try again.",
         variant: "destructive",
       });
       console.error("Chat error:", error);
@@ -238,15 +264,29 @@ export default function ChatPage() {
   });
 
   const handleSendMessage = (content: string) => {
-    setFailedMessage("");
+    const optimisticMsg = addOptimisticMessage(content);
+    if (!optimisticMsg) return;
+
     analytics.track("message_sent", {
       length: content.length,
       voiceMode: voiceModeEnabled
     });
-    sendMessageMutation.mutate(content);
+    
+    sendMessageMutation.mutate({ 
+      content, 
+      optimisticId: optimisticMsg.id 
+    });
   };
 
-  const displayMessages = [...messages];
+  const serverMessageIds = new Set(messages.map(m => m.content.trim().toLowerCase()));
+  const filteredOptimistic = optimisticMessages.filter(
+    optMsg => !serverMessageIds.has(optMsg.content.trim().toLowerCase())
+  );
+
+  const displayMessages: (Message | OptimisticMessage)[] = [
+    ...messages,
+    ...filteredOptimistic,
+  ];
 
   if (streamingMessage && session) {
     displayMessages.push({
@@ -256,77 +296,47 @@ export default function ChatPage() {
       sessionId: session.id,
       createdAt: new Date(),
       isStreaming: true,
-    } as any);
+    });
   }
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen w-full bg-background">
-        <ChatHeader sessionId={session?.id} userUsage={userUsage} />
-        <div className="flex-1 overflow-hidden flex flex-col gap-4 p-4 md:p-6 pt-20">
-          <Skeleton className="h-12 w-3/4 rounded-lg" />
-          <Skeleton className="h-12 w-2/3 rounded-lg ml-auto" />
-          <Skeleton className="h-12 w-3/4 rounded-lg" />
+      <div className="flex flex-col h-screen w-full">
+        <div className="gradient-header h-16" />
+        <div className="flex-1 overflow-hidden flex flex-col gap-4 p-4 bg-gradient-to-b from-purple-50/50 to-white">
+          <Skeleton className="h-16 w-3/4 rounded-2xl" />
+          <Skeleton className="h-12 w-2/3 rounded-2xl ml-auto" />
+          <Skeleton className="h-16 w-3/4 rounded-2xl" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`flex flex-col ${isMobile ? 'h-screen' : 'min-h-screen'} w-full bg-background`}>
+    <div className="flex flex-col h-screen w-full bg-white">
       <ChatHeader 
         sessionId={session?.id} 
         voiceModeEnabled={voiceModeEnabled}
         onVoiceModeToggle={() => setVoiceModeEnabled(!voiceModeEnabled)}
-        onAnalyzeClick={() => setShowAnalysis(true)}
         onPaymentClick={() => setPaywallOpen(true)}
         userUsage={userUsage}
       />
 
-      {showAnalysis ? (
-        <AnalysisScreen 
-          aiName="Riya"
-          userName={user?.name || "User"}
-          onClose={() => setShowAnalysis(false)} 
-        />
-      ) : (
-        <>
-          <ChatMessages 
-            messages={displayMessages} 
-            isLoading={isLoading}
-            isMobile={isMobile}
-          />
+      <ChatMessages 
+        messages={displayMessages as Message[]} 
+        isLoading={isMessagesLoading}
+        isMobile={isMobile}
+        isTyping={isTyping}
+      />
 
-          {isLimitReached && (
-            <div className={`${isMobile ? 'mx-2 mb-2' : 'mx-6 mb-4'} p-4 rounded-lg bg-amber-50 border border-amber-200`}>
-              <div className="flex items-center gap-2 mb-2">
-                <CreditCard className="w-5 h-5 text-amber-600" />
-                <span className="font-semibold text-amber-900">Message limit reached</span>
-              </div>
-              <p className="text-sm text-amber-800 mb-3">Upgrade to premium for unlimited messages</p>
-              <Button 
-                size="sm" 
-                className="w-full"
-                onClick={() => setPaywallOpen(true)}
-              >
-                Upgrade Now
-              </Button>
-            </div>
-          )}
-
-          <div className={isMobile ? 'px-2 pb-2' : 'px-6 pb-6'}>
-            <ChatInput 
-              onSendMessage={handleSendMessage}
-              isLoading={sendMessageMutation.isPending || isTyping}
-              disabled={isLimitReached}
-              isMobile={isMobile}
-              quickReplies={messages.length <= 3 ? quickReplies : []}
-              onQuickReply={handleSendMessage}
-              failedMessage={failedMessage}
-            />
-          </div>
-        </>
-      )}
+      <ChatInput 
+        onSendMessage={handleSendMessage}
+        isLoading={sendMessageMutation.isPending || isTyping}
+        disabled={isLimitReached}
+        isMobile={isMobile}
+        quickReplies={messages.length <= 3 ? quickReplies : []}
+        failedMessage={failedMessage}
+      />
 
       <PaywallSheet open={paywallOpen} onOpenChange={setPaywallOpen} />
     </div>

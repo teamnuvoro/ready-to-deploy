@@ -504,6 +504,57 @@
   box-shadow: 0 20px 35px rgba(255, 105, 140, 0.55);
 }
 
+.gradient-primary-button {
+  background: linear-gradient(120deg, #a855f7, #ec4899);
+  box-shadow: 0 20px 35px rgba(168, 85, 247, 0.25);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.gradient-primary-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 25px 40px rgba(236, 72, 153, 0.3);
+}
+
+.gradient-welcome {
+  background:
+    radial-gradient(at 20% 20%, rgba(255, 192, 234, 0.5), transparent 55%),
+    radial-gradient(at 80% 0%, rgba(196, 210, 255, 0.45), transparent 50%),
+    linear-gradient(180deg, #fff4fb, #fde7ff);
+}
+
+.persona-card {
+  border-radius: 32px;
+  overflow: hidden;
+  box-shadow: 0 35px 90px rgba(173, 121, 255, 0.25);
+  border: 1px solid rgba(236, 224, 255, 0.8);
+}
+
+.quick-reply-chip {
+  background: rgba(238, 232, 255, 0.8);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-weight: 500;
+  color: #6b21a8;
+  border: 1px solid rgba(145, 115, 206, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-reply-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(145, 115, 206, 0.2);
+}
+
+.tip-card {
+  background: linear-gradient(125deg, rgba(255, 241, 220, 0.95), rgba(255, 252, 240, 0.9));
+  border-radius: 24px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  box-shadow: 0 18px 40px rgba(251, 191, 36, 0.18);
+}
+
+.animate-bubble {
+  animation: bubbleIn 0.4s ease both;
+}
+
 .voice-shell {
   min-height: 100vh;
   padding: 2rem;

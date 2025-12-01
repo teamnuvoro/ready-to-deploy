@@ -1,18 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Link } from "wouter";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Activity,
-  Users,
-  BarChart3,
+  Sparkles,
+  MessageCircle,
+  Heart,
   Target,
-  TrendingUp,
-  PhoneCall,
-  MessageSquare,
+  CheckCircle2,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AnalyticsResponse {
   engagement: {
@@ -33,8 +31,18 @@ interface AnalyticsResponse {
   };
 }
 
+interface StrengthCard {
+  icon: React.ReactNode;
+  title: string;
+  score: number;
+  color: string;
+  traits: string[];
+}
+
 export default function AnalyticsPage() {
-  const { data, isLoading, error, refetch } = useQuery<AnalyticsResponse>({
+  const { user } = useAuth();
+
+  const { data, isLoading, error } = useQuery<AnalyticsResponse>({
     queryKey: ["/api/analytics"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/analytics");
@@ -42,177 +50,149 @@ export default function AnalyticsPage() {
     },
   });
 
+  const strengthCards: StrengthCard[] = [
+    {
+      icon: <MessageCircle className="w-6 h-6" />,
+      title: "Communication Style",
+      score: 85,
+      color: "bg-blue-500",
+      traits: [
+        "You value open and honest conversations",
+        "Prefer expressing feelings through words",
+        "Need regular emotional check-ins"
+      ]
+    },
+    {
+      icon: <Heart className="w-6 h-6" />,
+      title: "Emotional Intelligence",
+      score: 78,
+      color: "bg-pink-500",
+      traits: [
+        "You're empathetic and understanding",
+        "Can sometimes overthink situations",
+        "Value emotional depth in relationships"
+      ]
+    },
+    {
+      icon: <Target className="w-6 h-6" />,
+      title: "Relationship Goals",
+      score: 92,
+      color: "bg-purple-500",
+      traits: [
+        "Looking for long-term commitment",
+        "Value trust and loyalty",
+        "Ready for meaningful connection"
+      ]
+    }
+  ];
+
   return (
-    <div className="summary-shell">
-      <div className="summary-panel">
-        <header className="summary-header">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Chat
-            </Button>
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="gradient-header text-white px-4 py-4">
+        <div className="flex items-center gap-3">
+          <Link href="/chat">
+            <button className="p-2 hover:bg-white/10 rounded-full transition-colors" data-testid="button-back-to-chat">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
           </Link>
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => window.open("https://analytics.amplitude.com/", "_blank")}
-            >
-              <BarChart3 className="h-4 w-4" />
-              Open Amplitude
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => window.open("https://sentry.io/", "_blank")}
-            >
-              <Activity className="h-4 w-4" />
-              Open Sentry
-            </Button>
-            <div className="confidence-chip">
-              <Activity className="h-4 w-4" />
-              <div>
-                <p className="text-xs text-muted-foreground">Live Metrics</p>
-                <p className="text-sm font-semibold">Product Health</p>
-              </div>
+          <div>
+            <h1 className="font-semibold text-lg">Your Relationship Analysis</h1>
+            <p className="text-sm text-white/80">Personalized insights by Riya</p>
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <div className="px-4 py-6 max-w-2xl mx-auto space-y-6">
+        {/* Greeting Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-5 border border-purple-100"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg text-foreground">
+                Hello {user?.name || "User"}!
+              </h2>
+              <p className="text-muted-foreground text-sm leading-relaxed mt-1">
+                Based on our conversation, I've identified your relationship style and areas where you can grow. Let's explore what makes you unique in relationships.
+              </p>
             </div>
           </div>
-        </header>
+        </motion.div>
 
-        <div className="text-center space-y-2 mt-6 mb-10">
-          <h1 className="text-3xl font-bold">Experience Analytics</h1>
-          <p className="text-muted-foreground">
-            Monitor engagement, conversion, and quality at a glance.
-          </p>
+        {/* Strengths Section */}
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Your Relationship Strengths
+          </h2>
+
+          <div className="space-y-4">
+            {strengthCards.map((card, index) => (
+              <motion.div
+                key={card.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="analysis-card"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 ${card.color} text-white rounded-xl`}>
+                      {card.icon}
+                    </div>
+                    <h3 className="font-semibold text-foreground">{card.title}</h3>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-foreground">{card.score}</span>
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="progress-bar mb-4">
+                  <motion.div
+                    className="progress-bar-fill"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${card.score}%` }}
+                    transition={{ duration: 1, delay: 0.3 + index * 0.1 }}
+                  />
+                </div>
+
+                {/* Traits */}
+                <div className="space-y-2">
+                  {card.traits.map((trait, traitIndex) => (
+                    <div key={traitIndex} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span className="text-sm text-muted-foreground">{trait}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
 
-        {isLoading && (
-          <div className="summary-empty">
-            <p>Crunching numbers…</p>
-          </div>
-        )}
-
-        {error && (
-          <div className="summary-empty error">
-            <p>Unable to load analytics. Please try again.</p>
-            {error instanceof Error && (
-              <p className="text-xs text-muted-foreground mt-2">
-                {error.message}
-              </p>
-            )}
-            <Button onClick={() => refetch()} className="mt-4">Retry</Button>
-          </div>
-        )}
-
-        {!isLoading && !error && !data && (
-          <div className="summary-empty">
-            <p>No analytics data available yet.</p>
-          </div>
-        )}
-
-        {data && (
-          <div className="space-y-8">
-            <section>
-              <h2 className="text-lg font-semibold mb-4">Engagement</h2>
-              <div className="grid md:grid-cols-3 gap-4">
-                <Card className="insight-card">
-                  <div className="card-icon">
-                    <Users />
-                  </div>
-                  <p className="card-kicker">Total Users</p>
-                  <p className="card-body text-2xl font-semibold">
-                    {data.engagement.totalUsers.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    +{data.engagement.activeUsers7d} active in last 7 days
-                  </p>
-                </Card>
-                <Card className="insight-card">
-                  <div className="card-icon">
-                    <MessageSquare />
-                  </div>
-                  <p className="card-kicker">Messages</p>
-                  <p className="card-body text-2xl font-semibold">
-                    {data.engagement.totalMessages.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {data.engagement.avgMessagesPerSession} avg per session
-                  </p>
-                </Card>
-                <Card className="insight-card">
-                  <div className="card-icon">
-                    <PhoneCall />
-                  </div>
-                  <p className="card-kicker">Voice Calls</p>
-                  <p className="card-body text-2xl font-semibold">
-                    {data.engagement.voiceCallSessions}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {data.engagement.voiceMinutes} minutes on call
-                  </p>
-                </Card>
-              </div>
-            </section>
-
-            <section>
-              <h2 className="text-lg font-semibold mb-4">Conversion</h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Card className="insight-card">
-                  <div className="card-icon">
-                    <TrendingUp />
-                  </div>
-                  <p className="card-kicker">Premium Adoption</p>
-                  <p className="card-body text-2xl font-semibold">
-                    {data.conversion.freeToPaidConversion}% conversion
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {data.conversion.premiumUsers} active premium members
-                  </p>
-                </Card>
-                <Card className="insight-card">
-                  <div className="card-icon">
-                    <BarChart3 />
-                  </div>
-                  <p className="card-kicker">Plan Mix</p>
-                  <div className="mt-2 space-y-1 text-sm">
-                    {Object.keys(data.conversion.planBreakdown).length > 0 ? (
-                      Object.entries(data.conversion.planBreakdown).map(
-                        ([plan, value]) => (
-                          <div className="flex justify-between" key={plan}>
-                            <span className="text-muted-foreground capitalize">{plan}</span>
-                            <span className="font-semibold">{value}</span>
-                          </div>
-                        ),
-                      )
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No subscriptions yet</p>
-                    )}
-                  </div>
-                </Card>
-              </div>
-            </section>
-
-            <section>
-              <h2 className="text-lg font-semibold mb-4">Quality</h2>
-              <Card className="insight-card">
-                <div className="card-icon">
-                  <Target />
-                </div>
-                <p className="card-kicker">Summary Confidence</p>
-                <p className="card-body text-2xl font-semibold">
-                  {data.quality.confidenceScore}%
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Average confidence in your relationship insights.
-                </p>
-              </Card>
-            </section>
-          </div>
-        )}
+        {/* Back to Chat Button */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+          className="pt-4"
+        >
+          <Link href="/chat">
+            <button className="w-full py-4 gradient-primary-button text-white rounded-full font-medium shadow-lg shadow-purple-300/30">
+              Back to Chat with Riya
+            </button>
+          </Link>
+        </motion.div>
       </div>
     </div>
   );
 }
-

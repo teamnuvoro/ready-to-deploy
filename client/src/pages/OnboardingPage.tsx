@@ -1,174 +1,198 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { Loader2, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-const onboardingSchema = z.object({
-    name: z.string().min(2, "Name is required"),
-    age: z.string().transform(val => parseInt(val, 10)).pipe(z.number().min(18, "Must be 18+")),
-    city: z.string().min(2, "City is required"),
-    occupation: z.string().min(2, "Occupation is required"),
-    relationshipStatus: z.string().min(1, "Please select a status"),
-});
+interface Persona {
+  id: string;
+  name: string;
+  trait: string;
+  description: string;
+  image: string;
+}
+
+const personas: Persona[] = [
+  {
+    id: "riya",
+    name: "Riya",
+    trait: "Empathetic & Caring",
+    description: "Your warm companion who truly understands emotions and offers heartfelt advice.",
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=500&fit=crop&crop=face"
+  },
+  {
+    id: "maya",
+    name: "Maya",
+    trait: "Bold & Confident",
+    description: "A confident guide who helps you discover your true potential in relationships.",
+    image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop&crop=face"
+  },
+  {
+    id: "priya",
+    name: "Priya",
+    trait: "Playful & Fun",
+    description: "A fun-loving companion who brings joy and lightness to every conversation.",
+    image: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=500&fit=crop&crop=face"
+  }
+];
 
 export default function OnboardingPage() {
-    const [, setLocation] = useLocation();
-    const { toast } = useToast();
-    const { user } = useAuth();
-    const [isLoading, setIsLoading] = useState(false);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-    const form = useForm<z.infer<typeof onboardingSchema>>({
-        resolver: zodResolver(onboardingSchema),
-        defaultValues: {
-            name: user?.name || "",
-            age: (user?.age?.toString() || "") as any,
-            city: user?.city || "",
-            occupation: user?.occupation || "",
-            relationshipStatus: user?.relationshipStatus || "",
-        },
-    });
+  const currentPersona = personas[currentIndex];
 
-    async function onSubmit(values: z.infer<typeof onboardingSchema>) {
-        setIsLoading(true);
-        try {
-            await apiRequest("PATCH", "/api/user", values);
-            await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % personas.length);
+  };
 
-            toast({
-                title: "Profile Updated",
-                description: "Let's start chatting!",
-            });
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + personas.length) % personas.length);
+  };
 
-            setLocation("/chat");
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to save profile. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsLoading(false);
-        }
+  const handleContinue = async () => {
+    setIsLoading(true);
+    try {
+      toast({
+        title: `Welcome!`,
+        description: `${currentPersona.name} is ready to chat with you.`,
+      });
+      setLocation("/chat");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-full max-w-md space-y-8"
-            >
-                <div className="text-center space-y-2">
-                    <h1 className="text-3xl font-bold">Tell us about you</h1>
-                    <p className="text-muted-foreground">Help Riya get to know you better.</p>
-                </div>
-
-                <div className="bg-card border rounded-xl p-6 shadow-sm">
-                    <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                            <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>What should Riya call you?</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Your Name" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="age"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Age</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" placeholder="25" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="city"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>City</FormLabel>
-                                            <FormControl>
-                                                <Input placeholder="Mumbai" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-
-                            <FormField
-                                control={form.control}
-                                name="occupation"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>What do you do?</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Software Engineer, Student, etc." {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="relationshipStatus"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Relationship Status</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select status" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="single">Single</SelectItem>
-                                                <SelectItem value="dating">Dating</SelectItem>
-                                                <SelectItem value="complicated">It's Complicated</SelectItem>
-                                                <SelectItem value="married">Married</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                                    <>
-                                        Next Step
-                                        <ArrowRight className="w-4 h-4 ml-2" />
-                                    </>
-                                )}
-                            </Button>
-                        </form>
-                    </Form>
-                </div>
-            </motion.div>
+  return (
+    <div className="min-h-screen gradient-welcome flex flex-col px-6 py-8">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-6">
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <Sparkles className="w-5 h-5 text-purple-600" />
         </div>
-    );
+      </div>
+
+      {/* Title */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="text-center mb-8"
+      >
+        <h1 className="text-3xl font-bold text-foreground mb-2" data-testid="text-onboarding-title">
+          Choose Your<br />AI Assistant
+        </h1>
+        <p className="text-muted-foreground" data-testid="text-onboarding-subtitle">
+          Swipe to explore different personalities
+        </p>
+      </motion.div>
+
+      {/* Persona Carousel */}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="relative w-full max-w-sm">
+          {/* Navigation Arrows */}
+          <button
+            onClick={handlePrev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
+            data-testid="button-prev-persona"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <button
+            onClick={handleNext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 transition-colors"
+            data-testid="button-next-persona"
+          >
+            <ChevronRight className="w-5 h-5 text-gray-600" />
+          </button>
+
+          {/* Persona Card */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPersona.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              className="persona-card bg-white"
+            >
+              {/* Image */}
+              <div className="relative h-72 overflow-hidden">
+                <img
+                  src={currentPersona.image}
+                  alt={currentPersona.name}
+                  className="w-full h-full object-cover"
+                />
+                {/* Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                
+                {/* Name on Image */}
+                <div className="absolute bottom-4 left-4 text-white">
+                  <h2 className="text-2xl font-bold" data-testid="text-persona-name">
+                    {currentPersona.name}
+                  </h2>
+                  <p className="text-sm text-white/90" data-testid="text-persona-trait">
+                    {currentPersona.trait}
+                  </p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="p-5">
+                <p className="text-muted-foreground text-center leading-relaxed" data-testid="text-persona-description">
+                  {currentPersona.description}
+                </p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Pagination Dots */}
+          <div className="flex justify-center gap-2 mt-6">
+            {personas.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentIndex(index)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentIndex
+                    ? "w-6 bg-gray-800"
+                    : "bg-gray-300"
+                }`}
+                data-testid={`button-dot-${index}`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Continue Button */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        className="mt-8"
+      >
+        <Button
+          onClick={handleContinue}
+          className="w-full h-14 text-lg rounded-full gradient-primary-button text-white shadow-lg shadow-purple-400/30"
+          disabled={isLoading}
+          data-testid="button-continue"
+        >
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            `Continue with ${currentPersona.name}`
+          )}
+        </Button>
+      </motion.div>
+    </div>
+  );
 }

@@ -230,7 +230,6 @@ export function ChatInput({
     }
     
     const messageToSend = getCleanMessage();
-    console.log('handleSend called:', { messageToSend, message, isLoading, disabled });
     
     if (messageToSend && !isLoading && !disabled) {
       if (isRecording) {
@@ -238,8 +237,6 @@ export function ChatInput({
       }
       onSendMessage(messageToSend);
       setMessage("");
-    } else {
-      console.log('Send blocked:', { messageToSend, isLoading, disabled });
     }
   };
 

@@ -2,16 +2,20 @@ import { useState, useRef, useEffect } from "react";
 import { type Message } from "@shared/schema";
 import { ChatMessage } from "./ChatMessage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { X, Lightbulb } from "lucide-react";
 
 interface ChatMessagesProps {
   messages: Message[];
   isLoading?: boolean;
   isMobile?: boolean;
+  isTyping?: boolean;
 }
 
-export function ChatMessages({ messages, isLoading, isMobile }: ChatMessagesProps) {
+export function ChatMessages({ messages, isLoading, isMobile, isTyping }: ChatMessagesProps) {
   const [showTip, setShowTip] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
 
   const dailyTip = {
     title: "Today's Relationship Tip",
@@ -19,66 +23,108 @@ export function ChatMessages({ messages, isLoading, isMobile }: ChatMessagesProp
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  };
+
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setIsNearBottom(distanceFromBottom < 100);
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isTyping]);
 
   return (
-    <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-16 pb-4 px-3' : 'pt-16 pb-4 px-6'} bg-gradient-to-b from-secondary/20 to-background relative`}>
-      <div className="absolute inset-0 opacity-[0.02] pointer-events-none overflow-hidden">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 20c0-5.523 4.477-10 10-10s10 4.477 10 10c0 1.567-.362 3.047-1.006 4.365l8.485 8.485C49.047 32.362 50.527 32 52.092 32c5.523 0 10 4.477 10 10s-4.477 10-10 10c-1.565 0-3.045-.362-4.363-1.006l-8.485 8.485C39.638 60.953 40 62.433 40 64c0 5.523-4.477 10-10 10s-10-4.477-10-10c0-1.567.362-3.047 1.006-4.365l-8.485-8.485C11.047 51.638 9.567 52 8.002 52c-5.523 0-10-4.477-10-10s4.477-10 10-10c1.565 0 3.045.362 4.363 1.006l8.485-8.485C20.362 23.047 20 21.567 20 20z' fill='%23a855f7' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E")`,
-          backgroundSize: '80px 80px',
-          transform: 'rotate(-15deg) scale(1.5)',
-          transformOrigin: 'center'
-        }} />
-      </div>
-      
-      <div className="max-w-4xl mx-auto space-y-3 relative z-10">
-        {showTip && messages.length === 0 && (
-          <div className="mb-4 bg-gradient-to-r from-secondary/50 to-primary/10 rounded-xl p-4 border border-primary/20">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="text-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-primary">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                  </svg>
-                </span>
-                {dailyTip.title}
-              </h3>
+    <div 
+      ref={containerRef}
+      onScroll={handleScroll}
+      className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-4' : 'px-4 py-4'} bg-gradient-to-b from-purple-50/50 to-white`}
+    >
+      <div className="max-w-2xl mx-auto space-y-4">
+        {/* Relationship Tip Card */}
+        {showTip && (
+          <div className="tip-card mb-4 animate-bubble">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <Lightbulb className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900 mb-1" data-testid="text-tip-title">
+                    {dailyTip.title}
+                  </h3>
+                  <p className="text-sm text-amber-800/80 leading-relaxed" data-testid="text-tip-content">
+                    {dailyTip.text}
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowTip(false)}
-                className="text-muted-foreground hover:text-foreground text-sm"
+                className="flex-shrink-0 p-1 hover:bg-amber-200/50 rounded-full transition-colors"
                 data-testid="button-close-tip"
               >
-                x
+                <X className="w-4 h-4 text-amber-600" />
               </button>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{dailyTip.text}</p>
           </div>
         )}
 
+        {/* Messages */}
         {isLoading && messages.length === 0 ? (
           <div className="space-y-4 mt-4">
-            <Skeleton className="h-12 w-3/4 rounded-lg" />
-            <Skeleton className="h-12 w-2/3 rounded-lg ml-auto" />
+            <Skeleton className="h-16 w-3/4 rounded-2xl" />
+            <Skeleton className="h-12 w-2/3 rounded-2xl ml-auto" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center mb-4">
-              <span className="text-2xl text-white">Hi</span>
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <div className="w-16 h-16 rounded-full overflow-hidden mb-4 shadow-lg">
+              <img
+                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face"
+                alt="Riya"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Start a conversation with Riya</h3>
-            <p className="text-muted-foreground text-sm">Ask me anything about relationships, dating, or just chat!</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-title">
+              Start chatting with Riya
+            </h3>
+            <p className="text-muted-foreground text-sm" data-testid="text-empty-subtitle">
+              Ask me anything about relationships!
+            </p>
           </div>
         ) : (
           messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} />
           ))
         )}
+
+        {/* Typing Indicator */}
+        {isTyping && (
+          <div className="flex items-start gap-3 animate-fade-in" data-testid="typing-indicator">
+            <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+              <img
+                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face"
+                alt="Riya"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-muted-foreground">Riya is typing</span>
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
     </div>

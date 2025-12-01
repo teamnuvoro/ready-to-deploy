@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, Heart } from "lucide-react";
+import { motion } from "framer-motion";
 
 const authDisabled =
   import.meta.env.VITE_DISABLE_AUTH?.toString().toLowerCase() === "true";
@@ -40,7 +41,6 @@ export default function LoginPage() {
     }
   }, [authDisabled, setLocation]);
 
-  // State-driven redirect: navigate to chat when authentication completes
   useEffect(() => {
     if (isAuthenticated && shouldRedirectRef.current) {
       shouldRedirectRef.current = false;
@@ -48,16 +48,12 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, setLocation]);
 
-  // Redirect already-authenticated users away from login page
   useEffect(() => {
     if (isAuthenticated && !shouldRedirectRef.current) {
       setLocation("/");
     }
   }, [isAuthenticated, setLocation]);
 
-  const [location] = useLocation();
-
-  // Extract email from query params
   const getEmailFromQuery = () => {
     const searchParams = new URLSearchParams(window.location.search);
     return searchParams.get("email") || "";
@@ -98,14 +94,17 @@ export default function LoginPage() {
 
   if (authDisabled) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-lavender via-pastel-pink to-coral">
-        <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl text-center space-y-4">
-          <h1 className="text-3xl font-bold text-primary">Authentication Disabled</h1>
+      <div className="min-h-screen gradient-welcome flex items-center justify-center px-6 py-8">
+        <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">Authentication Disabled</h1>
           <p className="text-muted-foreground">
-            OTP login is turned off in this environment. You’re already signed in with the
-            local dev account.
+            You're signed in with the local dev account.
           </p>
-          <Button className="w-full" onClick={() => setLocation("/")}>
+          <Button 
+            className="w-full h-12 rounded-full gradient-primary-button text-white" 
+            onClick={() => setLocation("/")}
+            data-testid="button-go-to-app"
+          >
             Go to App
           </Button>
         </div>
@@ -114,32 +113,57 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-lavender via-pastel-pink to-coral">
-      <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2" data-testid="text-login-title">
-            Welcome Back
-          </h1>
-          <p className="text-muted-foreground" data-testid="text-login-subtitle">
-            Enter your email to continue
-          </p>
+    <div className="min-h-screen gradient-welcome flex flex-col items-center px-6 py-12">
+      {/* Heart Icon */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="mb-8"
+      >
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-300/50">
+          <Heart className="w-10 h-10 text-white fill-white" />
         </div>
+      </motion.div>
 
+      {/* Title */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="text-center mb-8"
+      >
+        <h1 
+          className="text-3xl font-bold text-foreground mb-2"
+          data-testid="text-login-title"
+        >
+          Welcome Back
+        </h1>
+        <p className="text-muted-foreground" data-testid="text-login-subtitle">
+          Enter your email to continue
+        </p>
+      </motion.div>
+
+      {/* Form Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="w-full max-w-md bg-white rounded-3xl p-8 shadow-xl"
+      >
         <Form {...emailForm}>
-          <form
-            onSubmit={emailForm.handleSubmit(onEmailSubmit)}
-            className="space-y-6"
-          >
+          <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-6">
             <FormField
               control={emailForm.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel className="text-foreground font-medium">Email Address</FormLabel>
                   <FormControl>
                     <Input
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder="your.email@example.com"
+                      className="h-12 rounded-xl border-gray-200 bg-gray-50 focus:bg-white transition-colors"
                       {...field}
                       data-testid="input-email"
                     />
@@ -151,13 +175,13 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full"
+              className="w-full h-14 text-lg rounded-full gradient-primary-button text-white shadow-lg shadow-purple-400/30"
               disabled={loginMutation.isPending}
               data-testid="button-login"
             >
               {loginMutation.isPending ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                   Logging in...
                 </>
               ) : (
@@ -167,19 +191,17 @@ export default function LoginPage() {
           </form>
         </Form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <button
-              onClick={() => setLocation("/signup")}
-              className="text-primary font-semibold hover:underline"
-              data-testid="link-signup"
-            >
-              Sign Up
-            </button>
-          </p>
-        </div>
-      </div>
+        <p className="text-center text-muted-foreground mt-6">
+          Don't have an account?{" "}
+          <button
+            onClick={() => setLocation("/signup")}
+            className="text-foreground font-semibold underline underline-offset-2"
+            data-testid="link-signup"
+          >
+            Sign Up
+          </button>
+        </p>
+      </motion.div>
     </div>
   );
 }
